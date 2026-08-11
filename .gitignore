@@ -1,0 +1,20 @@
+# ─── Environment Files (NEVER commit these) ───
+server/.env
+client/.env
+.env
+
+# ─── Dependencies ───
+node_modules/
+server/node_modules/
+client/node_modules/
+
+# ─── Vite Build Output ───
+client/dist/
+client/.vite/
+
+# ─── OS & Editor ───
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
+npm-debug.log*

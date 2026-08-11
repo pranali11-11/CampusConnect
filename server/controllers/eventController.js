@@ -1,0 +1,427 @@
+const Event = require('../models/Event');
+const Registration = require('../models/Registration');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
+const { uploadToCloudinary } = require('../config/cloudinary');
+
+/**
+ * Get all approved events (public)
+ * GET /api/events
+ */
+const getApprovedEvents = async (req, res) => {
+  const filter = {
+    status: { $in: ['approved', 'hod_approved'] },
+  };
+
+  if (req.query.status === 'approved') {
+    filter.status = { $in: ['approved', 'hod_approved'] };
+  }
+
+  const events = await Event.find(filter).populate('createdBy coordinatorId', 'name email mobile department');
+
+  res.status(200).json({
+    success: true,
+    count: events.length,
+    data: events,
+  });
+};
+
+/**
+ * Get upcoming approved events.
+ * GET /api/events/upcoming
+ */
+const getUpcomingEvents = async (req, res) => {
+  const limit = Math.max(1, parseInt(req.query.limit, 10) || 3);
+  const now = new Date();
+
+  const events = await Event.find({
+    status: { $in: ['approved', 'hod_approved'] },
+    date: { $gte: now },
+  })
+    .sort({ date: 1 })
+    .limit(limit)
+    .populate('createdBy coordinatorId', 'name email mobile department');
+
+  res.status(200).json({
+    success: true,
+    count: events.length,
+    data: events,
+  });
+};
+
+/**
+ * Create a new event
+ * POST /api/events
+ * Access: Private (Teacher only)
+ */
+const createEvent = async (req, res) => {
+  const {
+    title,
+    category,
+    description,
+    venue,
+    date,
+    time,
+    maxParticipants,
+    registrationDeadline,
+    bannerUrl,
+    coordinatorId,
+  } = req.body;
+
+  // Verify inputs are not empty
+  if (!title || !category || !description || !venue || !date || !time || !maxParticipants || !registrationDeadline) {
+    res.status(400);
+    throw new Error('Please fill in all required event details');
+  }
+
+  // Set bannerUrl using req.file.path from multer-storage-cloudinary or fallback from body
+  const finalBannerUrl = req.file ? req.file.path : (bannerUrl || "");
+
+  const event = await Event.create({
+    title,
+    category,
+    description,
+    venue,
+    date,
+    time,
+    maxParticipants,
+    registrationDeadline,
+    bannerUrl: finalBannerUrl,
+    coordinatorId: coordinatorId || req.user.id, // Fallback to creator if coordinator not specified
+    createdBy: req.user.id,
+    status: 'pending', // Fresh events start as pending HOD approval
+  });
+
+  res.status(201).json({
+    success: true,
+    data: event,
+  });
+
+  // Notify all HOD users about the new event
+  try {
+    const hods = await User.find({ role: 'hod' });
+    const notifications = hods.map((hod) => ({
+      userId: hod._id,
+      message: `New event "${event.title}" created by ${req.user.name}. Please review.`,
+      type: 'event_reminder',
+    }));
+    if (notifications.length) await Notification.insertMany(notifications);
+  } catch (err) {
+    console.error('Failed to notify HODs:', err.message);
+  }
+};
+
+/**
+ * Get single event by ID
+ * GET /api/events/:id
+ */
+const getEventById = async (req, res) => {
+  const event = await Event.findById(req.params.id)
+    .populate('createdBy', 'name email department mobile')
+    .populate('approvedByHOD', 'name email department')
+    .populate('coordinatorId', 'name email mobile department');
+
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: event,
+  });
+};
+
+/**
+ * Edit event details
+ * PUT /api/events/:id
+ * Access: Private (Teacher owner only)
+ */
+const updateEvent = async (req, res) => {
+  let event = await Event.findById(req.params.id);
+
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  // Ensure logged-in teacher is the owner of the event
+  if (event.createdBy.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Forbidden: You can only edit events you created');
+  }
+
+  // If HOD rejected or approved, editing an event might reset it to pending
+  req.body.status = 'pending'; // Reset status to pending for review after modification
+
+  // Handle optional banner file upload
+  if (req.file && req.file.path) {
+    req.body.bannerUrl = req.file.path;
+  }
+
+  event = await Event.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: event,
+  });
+};
+
+/**
+ * Delete an event
+ * DELETE /api/events/:id
+ * Access: Private (Teacher owner only)
+ */
+const deleteEvent = async (req, res) => {
+  const event = await Event.findById(req.params.id);
+
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  // Ensure logged-in teacher is the owner of the event
+  if (event.createdBy.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Forbidden: You can only delete events you created');
+  }
+
+  // Only allow deletion when event is still pending
+  if (event.status && event.status !== 'pending') {
+    res.status(400);
+    throw new Error('Only events with pending status can be deleted');
+  }
+
+  await event.deleteOne();
+
+  res.status(200).json({
+    success: true,
+    message: 'Event successfully deleted',
+  });
+};
+
+/**
+ * HOD Approves an event
+ * PATCH /api/events/:id/approve
+ * Access: Private (HOD only)
+ */
+const approveEventByHOD = async (req, res) => {
+  const event = await Event.findById(req.params.id);
+
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  event.status = 'hod_approved'; // HOD approval should move event into hod_approved bucket
+
+  event.approvedByHOD = req.user.id;
+  event.rejectionReason = ''; // Clear rejection reason if previously set
+
+  await event.save();
+
+  // Trigger Notification to event creator (Teacher)
+  await Notification.create({
+    userId: event.createdBy,
+    message: `Your event "${event.title}" has been approved by HOD ${req.user.name}.`,
+    type: 'event_approved',
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Event has been successfully approved',
+    data: event,
+  });
+};
+
+/**
+ * HOD Rejects an event
+ * PATCH /api/events/:id/reject
+ * Access: Private (HOD only)
+ */
+const rejectEventByHOD = async (req, res) => {
+  const { rejectionReason } = req.body;
+
+  if (!rejectionReason) {
+    res.status(400);
+    throw new Error('Please provide a rejection reason');
+  }
+
+  const event = await Event.findById(req.params.id);
+
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  event.status = 'rejected';
+  event.rejectionReason = rejectionReason;
+  event.approvedByHOD = undefined; // Reset approval in case of revision
+
+  await event.save();
+
+  // Trigger Notification to event creator (Teacher)
+  await Notification.create({
+    userId: event.createdBy,
+    message: `Your event "${event.title}" has been rejected. Reason: ${rejectionReason}`,
+    type: 'event_approved', // Using event_approved type as system message category for HOD decisions
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Event has been rejected',
+    data: event,
+  });
+};
+
+/**
+ * Get teacher's own events
+ * GET /api/events/my
+ * Access: Private (Teacher only)
+ */
+const getTeacherEvents = async (req, res) => {
+  const events = await Event.find({ createdBy: req.user.id })
+    .populate('coordinatorId', 'name email mobile')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: events.length,
+    data: events,
+  });
+};
+
+/**
+ * Get events pending HOD approval
+ * GET /api/events/pending
+ * Access: Private (HOD only)
+ */
+const getPendingEvents = async (req, res) => {
+  const events = await Event.find({ status: 'pending' })
+
+    .populate('createdBy', 'name email department')
+    .populate('coordinatorId', 'name email mobile department')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: events.length,
+    data: events,
+  });
+};
+
+/**
+ * Get aggregated HOD dashboard statistics
+ * GET /api/events/dashboard
+ * Access: Private (HOD only)
+ */
+const getHODDashboardStats = async (req, res) => {
+  const now = new Date();
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(now.getMonth() - 5);
+
+  const [
+    totalEvents,
+    pendingEvents,
+    approvedEvents,
+    rejectedEvents,
+    upcomingEvents,
+    totalRegistrations,
+    totalAttended,
+    registrationStatusBreakdown,
+    eventsByCategory,
+    monthlyRegistrationsRaw,
+    totalStudents,
+    totalTeachers,
+    topDepartments,
+  ] = await Promise.all([
+    Event.countDocuments(),
+    Event.countDocuments({ status: 'pending' }),
+    Event.countDocuments({ status: { $in: ['approved', 'hod_approved'] } }),
+    Event.countDocuments({ status: 'rejected' }),
+    Event.countDocuments({ status: { $in: ['approved', 'hod_approved'] }, date: { $gte: now } }),
+    Registration.countDocuments(),
+    Registration.countDocuments({ status: 'attended' }),
+    Registration.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+      { $project: { _id: 0, status: '$_id', count: 1 } },
+    ]),
+    Event.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $project: { _id: 0, category: '$_id', count: 1 } },
+    ]),
+    Registration.aggregate([
+      { $match: { registeredAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: { year: { $year: '$registeredAt' }, month: { $month: '$registeredAt' } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
+    ]),
+    User.countDocuments({ role: 'student' }),
+    User.countDocuments({ role: 'teacher' }),
+    Registration.aggregate([
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'studentId',
+          foreignField: '_id',
+          as: 'student',
+        },
+      },
+      { $unwind: '$student' },
+      { $group: { _id: '$student.department', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 },
+      { $project: { _id: 0, department: '$_id', count: 1 } },
+    ]),
+  ]);
+
+  const monthlyRegistrations = monthlyRegistrationsRaw.map(({ _id, count }) => ({
+    month: `${_id.month.toString().padStart(2, '0')}/${_id.year}`,
+    count,
+  }));
+
+  const attendanceRate = totalRegistrations > 0
+    ? Math.round((totalAttended / totalRegistrations) * 100)
+    : 0;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalEvents,
+      pendingEvents,
+      approvedEvents,
+      rejectedEvents,
+      upcomingEvents,
+      totalRegistrations,
+      totalStudents,
+      totalTeachers,
+      totalAttended,
+      attendanceRate,
+      registrationStatusBreakdown,
+      eventsByCategory,
+      monthlyRegistrations,
+      topDepartments,
+    },
+  });
+};
+
+module.exports = {
+  getApprovedEvents,
+  getUpcomingEvents,
+  createEvent,
+  getEventById,
+  updateEvent,
+  deleteEvent,
+  approveEventByHOD,
+  rejectEventByHOD,
+  getTeacherEvents,
+  getPendingEvents,
+  getHODDashboardStats,
+};
