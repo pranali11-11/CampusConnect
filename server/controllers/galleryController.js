@@ -7,6 +7,11 @@ const { uploadToCloudinary } = require('../config/cloudinary');
  * POST /api/gallery/upload
  * Access: Private (Teacher / HOD)
  */
+/**
+ * Upload an image to the gallery for a specific event
+ * POST /api/gallery/upload
+ * Access: Private (Teacher / HOD)
+ */
 const uploadGalleryImage = async (req, res) => {
   const { eventId, category } = req.body;
 
@@ -27,15 +32,25 @@ const uploadGalleryImage = async (req, res) => {
     throw new Error('Event not found');
   }
 
-  // Upload file buffer to Cloudinary
   try {
-    const result = await uploadToCloudinary(req.file.buffer, 'campusconnect_gallery');
-    
-    // Save record to database (store cloudinary public_id too)
+    const imageUrl =
+      req.file?.path ||
+      req.file?.secure_url ||
+      req.file?.url ||
+      req.file?.location ||
+      '';
+    const publicId = req.file?.public_id || req.file?.filename || '';
+
+    if (!imageUrl) {
+      res.status(400);
+      throw new Error('Unable to resolve uploaded file URL');
+    }
+
+    // Save record to database
     const galleryItem = await Gallery.create({
       eventId,
-      imageUrl: result.secure_url,
-      publicId: result.public_id || '',
+      imageUrl,
+      publicId,
       uploadedBy: req.user.id,
       category: category || event.category,
     });
@@ -46,10 +61,32 @@ const uploadGalleryImage = async (req, res) => {
       data: galleryItem,
     });
   } catch (error) {
-    console.error('Cloudinary upload failure:', error);
+    console.error('Gallery image upload failure:', error);
     res.status(500);
-    throw new Error('Failed to upload image to cloud storage: ' + error.message);
+    throw new Error('Failed to upload gallery image: ' + error.message);
   }
+};
+
+/**
+ * Retrieve all gallery images across events (public)
+ * GET /api/gallery
+ */
+const getAllGallery = async (req, res) => {
+  const filter = {};
+  if (req.query.category && req.query.category !== 'All') {
+    filter.category = req.query.category;
+  }
+
+  const galleryItems = await Gallery.find(filter)
+    .populate('eventId', 'title category date venue description')
+    .populate('uploadedBy', 'name email role')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: galleryItems.length,
+    data: galleryItems,
+  });
 };
 
 /**
@@ -61,6 +98,7 @@ const getEventGallery = async (req, res) => {
   const { eventId } = req.params;
 
   const galleryItems = await Gallery.find({ eventId })
+    .populate('eventId', 'title category date venue')
     .populate('uploadedBy', 'name email role')
     .sort({ createdAt: -1 });
 
@@ -76,7 +114,9 @@ const getEventGallery = async (req, res) => {
  * GET /api/gallery/my
  */
 const getMyGallery = async (req, res) => {
-  const items = await Gallery.find({ uploadedBy: req.user.id }).sort({ createdAt: -1 });
+  const items = await Gallery.find({ uploadedBy: req.user.id })
+    .populate('eventId', 'title category')
+    .sort({ createdAt: -1 });
   res.status(200).json({ success: true, count: items.length, data: items });
 };
 
@@ -113,6 +153,7 @@ const deleteGalleryItem = async (req, res) => {
 
 module.exports = {
   uploadGalleryImage,
+  getAllGallery,
   getEventGallery,
   getMyGallery,
   deleteGalleryItem,

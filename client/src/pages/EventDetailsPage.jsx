@@ -11,6 +11,22 @@ import eventService from '../services/eventService';
 import registrationService from '../services/registrationService';
 import { formatDate } from '../utils/formatDate';
 
+const resolveEventBannerUrl = (url) => {
+  if (!url) return '/default-poster.svg';
+
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+
+  if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const backendBase = apiUrl.replace(/\/api\/?$/, '');
+    return `${backendBase}${url.startsWith('/') ? url : `/${url}`}`;
+  }
+
+  return url;
+};
+
 const EventDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,6 +43,7 @@ const EventDetailsPage = () => {
   const [registrationData, setRegistrationData] = useState(null);
   const [countdown, setCountdown] = useState('');
   const [relatedEvents, setRelatedEvents] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([{ name: '', email: '' }]);
   const qrRef = useRef();
 
   // Sample data for schedule, speakers
@@ -85,6 +102,15 @@ const EventDetailsPage = () => {
     fetchEvent();
   }, [id, user, showToast]);
 
+  useEffect(() => {
+    if (event?.registrationType === 'team') {
+      const desiredCount = Math.max(1, (event.minTeamSize || 2) - 1);
+      setTeamMembers(Array.from({ length: desiredCount }, () => ({ name: '', email: '' })));
+    } else {
+      setTeamMembers([{ name: '', email: '' }]);
+    }
+  }, [event?._id, event?.registrationType, event?.minTeamSize]);
+
   // Countdown timer
   useEffect(() => {
     if (!event?.date) return;
@@ -109,6 +135,19 @@ const EventDetailsPage = () => {
     return () => clearInterval(interval);
   }, [event?.date]);
 
+  const handleTeamMemberChange = (index, field, value) => {
+    setTeamMembers((prev) =>
+      prev.map((member, i) => (i === index ? { ...member, [field]: value } : member))
+    );
+  };
+
+  const addTeamMemberField = () => {
+    if (!event || event.registrationType !== 'team') return;
+    const maxAllowed = event.maxTeamSize || 4;
+    if (teamMembers.length >= Math.max(0, maxAllowed - 1)) return;
+    setTeamMembers((prev) => [...prev, { name: '', email: '' }]);
+  };
+
   const handleRegister = async () => {
     if (!user) {
       showToast('Please log in to register', 'warning');
@@ -121,9 +160,26 @@ const EventDetailsPage = () => {
       return;
     }
 
+    if (event?.registrationType === 'team') {
+      const validMembers = teamMembers.filter((member) => member.name.trim() || member.email.trim());
+      if (validMembers.length + 1 < (event.minTeamSize || 2) || validMembers.length + 1 > (event.maxTeamSize || 4)) {
+        showToast(`Team size must be between ${event.minTeamSize || 2} and ${event.maxTeamSize || 4} members.`, 'warning');
+        return;
+      }
+
+      const invalidMember = validMembers.find((member) => !member.name.trim() || !member.email.trim());
+      if (invalidMember) {
+        showToast('Please enter both name and email for each teammate.', 'warning');
+        return;
+      }
+    }
+
     setRegistering(true);
     try {
-      const res = await registrationService.registerForEvent(id);
+      const res = await registrationService.registerForEvent(
+        id,
+        event?.registrationType === 'team' ? teamMembers.filter((member) => member.name.trim() && member.email.trim()) : []
+      );
       if (res.success) {
         setRegistrationData(res.data);
         setShowQRModal(true);
@@ -165,9 +221,16 @@ const EventDetailsPage = () => {
   if (loading) return <Loader />;
   if (!event) return <div className="text-center py-12">Event not found</div>;
 
-  const seatsRemaining = event.maxParticipants - registrationCount;
+  const seatsRemaining = Math.max(0, event.maxParticipants - registrationCount);
   const seatsColor =
     seatsRemaining > 20 ? 'text-green-600' : seatsRemaining >= 5 ? 'text-yellow-500' : 'text-red-500';
+
+  const now = new Date();
+  const deadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+  if (deadline && !isNaN(deadline.getTime())) {
+    deadline.setHours(23, 59, 59, 999);
+  }
+  const isDeadlinePassed = deadline && !isNaN(deadline.getTime()) && now.getTime() > deadline.getTime();
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📋' },
@@ -178,26 +241,39 @@ const EventDetailsPage = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      {/* Hero Banner */}
-      <div
-        className="relative h-72 bg-cover bg-center"
-        style={{
-          backgroundImage: event.bannerUrl
-            ? `url(${event.bannerUrl})`
-            : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
-        <div className="absolute bottom-6 left-6 text-white">
-          <h1 className="text-4xl font-bold mb-2">{event.title}</h1>
-          <span className="inline-block px-3 py-1 bg-blue-500 rounded-full text-sm font-semibold">
-            {event.category || 'Event'}
-          </span>
+      {/* Prominent Event Poster Header */}
+      <div className="max-w-6xl mx-auto px-4 pt-8">
+        <div className="relative w-full h-64 sm:h-80 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-slate-900 border border-slate-200 dark:border-slate-700">
+          <img
+            src={resolveEventBannerUrl(event.registrationBannerUrl || event.bannerUrl || "/default-poster.svg")}
+            alt={event.title}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "/default-poster.svg";
+            }}
+            className="w-full h-full object-contain bg-white dark:bg-slate-800 p-2"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+          <div className="absolute bottom-6 left-6 right-6 text-white flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="px-3.5 py-1 bg-blue-600/90 text-white rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                  {event.category || 'Event'}
+                </span>
+                {isDeadlinePassed && (
+                  <span className="px-3.5 py-1 bg-rose-600/90 text-white rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                    Registration Closed
+                  </span>
+                )}
+              </div>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight drop-shadow-md">{event.title}</h1>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Info Bar */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 mt-6 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-3">
             <span className="text-2xl">📅</span>
@@ -384,7 +460,7 @@ const EventDetailsPage = () => {
             <div>
               <h3 className="font-bold text-lg mb-4">{event.title}</h3>
               <div className="space-y-3 text-sm mb-4">
-<div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <span>📅</span>
                   <span>{formatDate(event.date)}</span>
                 </div>
@@ -421,19 +497,68 @@ const EventDetailsPage = () => {
               </div>
             </div>
 
+            {event?.registrationType === 'team' && (
+              <div className="space-y-3 border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-slate-50 dark:bg-slate-700/30">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Team Details</p>
+                  <button
+                    type="button"
+                    onClick={addTeamMemberField}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    + Add teammate
+                  </button>
+                </div>
+
+                {teamMembers.map((member, index) => (
+                  <div key={index} className="space-y-2">
+                    <input
+                      type="text"
+                      value={member.name}
+                      placeholder={`Teammate ${index + 1} name`}
+                      onChange={(e) => handleTeamMemberChange(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                    <input
+                      type="email"
+                      value={member.email}
+                      placeholder={`Teammate ${index + 1} email`}
+                      onChange={(e) => handleTeamMemberChange(index, 'email', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                ))}
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Team size: {event.minTeamSize || 2} - {event.maxTeamSize || 4} members
+                </p>
+              </div>
+            )}
+
             {/* Register Button */}
             <button
               onClick={handleRegister}
-              disabled={isRegistered || registering || seatsRemaining === 0}
+              disabled={isRegistered || registering || seatsRemaining === 0 || isDeadlinePassed}
               className={`w-full py-3 rounded-lg font-semibold transition ${
                 isRegistered
                   ? 'bg-slate-300 dark:bg-slate-700 text-slate-600 cursor-not-allowed'
+                  : isDeadlinePassed
+                  ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 cursor-not-allowed'
                   : seatsRemaining === 0
-                    ? 'bg-slate-300 dark:bg-slate-700 text-slate-600 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  ? 'bg-slate-300 dark:bg-slate-700 text-slate-600 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >
-              {registering ? 'Registering...' : isRegistered ? '✓ Already Registered' : seatsRemaining === 0 ? 'Seats Full' : 'Register Now'}
+              {registering
+                ? 'Registering...'
+                : isRegistered
+                ? '✓ Already Registered'
+                : isDeadlinePassed
+                ? '❌ Registration Closed'
+                : seatsRemaining === 0
+                ? 'Seats Full'
+                : event?.registrationType === 'team'
+                ? 'Register Team'
+                : 'Register Now'}
             </button>
 
             {/* Share Buttons */}
@@ -495,12 +620,25 @@ const EventDetailsPage = () => {
               </p>
             </div>
 
-            <button
-              onClick={downloadQR}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition"
-            >
-              📥 Download QR Code
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={downloadQR}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition"
+              >
+                📥 Download QR Code
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowQRModal(false);
+                  navigate('/#events');
+                }}
+                className="w-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 py-3 px-4 rounded-lg font-semibold transition flex items-center justify-start gap-2"
+              >
+                <span aria-hidden="true" className="text-sm">🏠</span>
+                <span>Back to Home / Upcoming Events</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ const {
   registerForEvent,
   getStudentRegistrations,
   getEventParticipants,
+  updatePaymentStatus,
 } = require('../controllers/registrationController');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
@@ -13,6 +14,7 @@ router.use(protect);
 
 // Student registration endpoints
 router.post('/', roleMiddleware('student'), registerForEvent);
+router.patch('/payment-status', roleMiddleware('teacher', 'hod'), updatePaymentStatus);
 router.get('/my', roleMiddleware('student'), getStudentRegistrations);
 
 // Teacher/HOD event rosters view

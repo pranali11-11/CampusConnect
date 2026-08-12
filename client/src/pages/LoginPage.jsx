@@ -71,10 +71,7 @@ const LoginPage = () => {
           'Login failed. Please verify your credentials.';
 
       showToast(errorMsg, 'error');
-    } finally {
-      setSubmitting(false);
     }
-
   };
 
   const handleForgotPassword = async (e) => {

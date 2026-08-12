@@ -13,7 +13,7 @@ const {
   getPendingEvents,
   getHODDashboardStats,
 } = require('../controllers/eventController');
-const { uploadBanner } = require('../config/cloudinary');
+const { uploadBanner, normalizeFilePath } = require('../config/cloudinary');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
@@ -36,8 +36,8 @@ router.get('/upcoming', getUpcomingEvents);
 router.get('/:id', getEventById);
 
 // Protected routes (for mutations and approvals)
-router.post('/', protect, roleMiddleware('teacher'), uploadBanner.single('banner'), createEvent);
-router.put('/:id', protect, roleMiddleware('teacher'), uploadBanner.single('banner'), updateEvent);
+router.post('/', protect, roleMiddleware('teacher'), uploadBanner.single('registrationBanner'), normalizeFilePath, createEvent);
+router.put('/:id', protect, roleMiddleware('teacher'), uploadBanner.single('registrationBanner'), normalizeFilePath, updateEvent);
 router.delete('/:id', protect, roleMiddleware('teacher'), deleteEvent);
 
 // HOD Approval/Rejection routes

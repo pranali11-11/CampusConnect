@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { uploadGalleryImage, getEventGallery, getMyGallery, deleteGalleryItem } = require('../controllers/galleryController');
+const { uploadGalleryImage, getAllGallery, getEventGallery, getMyGallery, deleteGalleryItem } = require('../controllers/galleryController');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
-const { upload } = require('../config/cloudinary');
+const { upload, normalizeFilePath } = require('../config/cloudinary');
+
+// Get all gallery items (public)
+router.get('/', getAllGallery);
 
 // Upload gallery image (restricted to Teacher / HOD)
 router.post(
@@ -11,10 +14,10 @@ router.post(
   protect,
   roleMiddleware('teacher', 'hod'),
   upload.single('image'),
+  normalizeFilePath,
   uploadGalleryImage
 );
 
-// Get event gallery (public)
 // Teacher's own gallery items
 router.get('/my/list', protect, roleMiddleware('teacher', 'hod'), getMyGallery);
 
@@ -25,3 +28,4 @@ router.delete('/:id', protect, roleMiddleware('teacher', 'hod'), deleteGalleryIt
 router.get('/:eventId', getEventGallery);
 
 module.exports = router;
+

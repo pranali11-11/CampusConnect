@@ -5,18 +5,27 @@ import axios from 'axios';
 // Create Axios Instance
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
-// Request Interceptor: Inject token from LocalStorage
+// Request Interceptor: Inject token and normalize FormData headers
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    if (config.data instanceof FormData) {
+      config.headers = config.headers || {};
+      delete config.headers['Content-Type'];
+    } else {
+      config.headers = config.headers || {};
+      if (!config.headers['Content-Type']) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+    }
+
     return config;
   },
   (error) => {

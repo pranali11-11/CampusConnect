@@ -12,30 +12,55 @@ const GalleryPage = () => {
   const [visibleCount, setVisibleCount] = useState(12);
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
+  const getGalleryImageSrc = (url) => {
+    if (!url) return '/default-poster.svg';
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    if (url.startsWith('/uploads/')) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const backendBase = apiUrl.replace(/\/api\/?$/, '');
+      return `${backendBase}${url}`;
+    }
+
+    return url;
+  };
+
   const categories = ['All', 'Technical', 'Cultural', 'Sports', 'Workshop'];
 
   // Fetch all gallery images
   useEffect(() => {
+    let isMounted = true;
     const fetchGallery = async () => {
       try {
+        setLoading(true);
         const res = await eventService.getGallery();
-        if (res.success) {
-          setAllImages(res.data);
+        if (isMounted && res.success) {
+          setAllImages(res.data || []);
         }
       } catch (err) {
-        showToast('Failed to load gallery', 'error');
-        console.error('Error loading gallery:', err);
+        if (isMounted) {
+          showToast('Failed to load gallery', 'error');
+          console.error('Error loading gallery:', err);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     fetchGallery();
-  }, [showToast]);
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter images by category
   const filteredImages = activeCategory === 'All' 
     ? allImages 
-    : allImages.filter(img => img.eventId?.category === activeCategory);
+    : allImages.filter(img => (img.category || img.eventId?.category) === activeCategory);
 
   // Get visible images
   const visibleImages = filteredImages.slice(0, visibleCount);
@@ -129,8 +154,12 @@ const GalleryPage = () => {
                 {/* Image */}
                 <div className="relative w-full h-64 bg-slate-200 dark:bg-slate-700 overflow-hidden">
                   <img
-                    src={image.imageUrl}
-                    alt={image.eventId?.title}
+                    src={getGalleryImageSrc(image.imageUrl)}
+                    alt={image.eventId?.title || 'Gallery Image'}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = '/default-poster.svg';
+                    }}
                     loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
                   />
@@ -138,11 +167,11 @@ const GalleryPage = () => {
 
                 {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex flex-col justify-end p-4">
-                  <p className="text-white font-bold">{image.eventId?.title || 'Event Photo'}</p>
+                  <p className="text-white font-bold">{image.eventId?.title || 'Campus Event Photo'}</p>
                   <p className="text-slate-200 text-sm">
-                    {image.eventId?.category && (
+                    {(image.category || image.eventId?.category) && (
                       <span className="inline-block mt-2 px-2 py-1 bg-blue-500 rounded-full text-xs">
-                        {image.eventId.category}
+                        {image.category || image.eventId?.category}
                       </span>
                     )}
                   </p>
@@ -151,13 +180,13 @@ const GalleryPage = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl">
+          <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
             <p className="text-5xl mb-4">📷</p>
             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
               No Images Found
             </h3>
             <p className="text-slate-600 dark:text-slate-400">
-              Try selecting a different category
+              There are currently no images available for this category.
             </p>
           </div>
         )}
@@ -195,7 +224,7 @@ const GalleryPage = () => {
             onClick={e => e.stopPropagation()}
           >
             <img
-              src={currentImage.imageUrl}
+              src={getGalleryImageSrc(currentImage.imageUrl)}
               alt={currentImage.eventId?.title}
               className="w-full max-h-screen-80 object-contain rounded-lg"
             />

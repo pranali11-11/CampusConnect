@@ -14,14 +14,20 @@ export const ToastProvider = ({ children }) => {
    * @param {'success'|'error'|'info'|'warning'} type - Category of toast.
    */
   const showToast = useCallback((message, type = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => {
+      // Prevent duplicate toasts if the same message & type is already active
+      if (prev.some((t) => t.message === message && t.type === type)) {
+        return prev;
+      }
+      const id = Math.random().toString(36).substring(2, 9);
+      
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        setToasts((active) => active.filter((toast) => toast.id !== id));
+      }, 3000);
 
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3000);
-
+      return [...prev, { id, message, type }];
+    });
   }, []);
 
   const removeToast = useCallback((id) => {

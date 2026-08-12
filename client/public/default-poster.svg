@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="50%" stop-color="#312e81" />
+      <stop offset="100%" stop-color="#4338ca" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="circleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="450" fill="url(#bgGrad)" />
+
+  <!-- Decorative shapes -->
+  <circle cx="100" cy="80" r="180" fill="url(#circleGrad)" />
+  <circle cx="720" cy="380" r="220" fill="url(#circleGrad)" />
+  <path d="M 0 350 Q 200 280 400 360 T 800 320 L 800 450 L 0 450 Z" fill="#1e1b4b" opacity="0.4" />
+
+  <!-- Grid lines decor -->
+  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="1">
+    <line x1="0" y1="100" x2="800" y2="100" />
+    <line x1="0" y1="200" x2="800" y2="200" />
+    <line x1="0" y1="300" x2="800" y2="300" />
+    <line x1="200" y1="0" x2="200" y2="450" />
+    <line x1="400" y1="0" x2="400" y2="450" />
+    <line x1="600" y1="0" x2="600" y2="450" />
+  </g>
+
+  <!-- Central Icon & Graphic -->
+  <g transform="translate(400, 195)">
+    <!-- Glowing background ring -->
+    <circle r="75" fill="none" stroke="url(#accentGrad)" stroke-width="3" stroke-dasharray="8 6" opacity="0.6" />
+    <circle r="60" fill="#3730a3" opacity="0.8" />
+    
+    <!-- Graduation Cap / Campus Icon -->
+    <path d="M 0 -24 L 35 -6 L 0 12 L -35 -6 Z" fill="#60a5fa" />
+    <path d="M 35 -6 L 35 12" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" />
+    <circle cx="35" cy="14" r="4" fill="#fbbf24" />
+    <path d="M -22 0 L -22 18 C -22 26 22 26 22 18 L 22 0" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="400" y="325" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="28" letter-spacing="2">
+    CampusConnect
+  </text>
+  <text x="400" y="355" text-anchor="middle" fill="#93c5fd" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="14" letter-spacing="3" opacity="0.9">
+    COLLEGE EVENT MANAGEMENT
+  </text>
+</svg>

@@ -1,8 +1,47 @@
+const fs = require('fs');
+const path = require('path');
 const Event = require('../models/Event');
 const Registration = require('../models/Registration');
+const Attendance = require('../models/Attendance');
+const Certificate = require('../models/Certificate');
+const Gallery = require('../models/Gallery');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
-const { uploadToCloudinary } = require('../config/cloudinary');
+const { cloudinary, isCloudinaryConfigured, uploadToCloudinary } = require('../config/cloudinary');
+
+const deleteLocalFileIfExists = (relativeOrAbsoluteUrl) => {
+  if (!relativeOrAbsoluteUrl) return Promise.resolve();
+
+  const isCloudinaryUrl = relativeOrAbsoluteUrl.startsWith('http://') || relativeOrAbsoluteUrl.startsWith('https://');
+  if (isCloudinaryUrl && isCloudinaryConfigured()) {
+    try {
+      const match = relativeOrAbsoluteUrl.match(/(?:upload\/.*?\/)?(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/i);
+      const publicId = match && match[1] ? match[1].replace(/\//g, ':') : null;
+      if (publicId) {
+        return cloudinary.uploader.destroy(publicId).catch(() => {});
+      }
+    } catch (error) {
+      console.error('Cloudinary cleanup failed:', error.message);
+    }
+    return Promise.resolve();
+  }
+
+  if (!relativeOrAbsoluteUrl.startsWith('/uploads/') && !relativeOrAbsoluteUrl.startsWith('uploads/')) {
+    return Promise.resolve();
+  }
+
+  const normalizedPath = relativeOrAbsoluteUrl.replace(/^\/+/, '');
+  const localFilePath = path.join(__dirname, '..', normalizedPath);
+
+  return new Promise((resolve) => {
+    fs.unlink(localFilePath, (error) => {
+      if (error && error.code !== 'ENOENT') {
+        console.error('Local image cleanup failed:', error.message);
+      }
+      resolve();
+    });
+  });
+};
 
 /**
  * Get all approved events (public)
@@ -64,8 +103,13 @@ const createEvent = async (req, res) => {
     time,
     maxParticipants,
     registrationDeadline,
+    registrationFee,
+    registrationBannerUrl,
     bannerUrl,
     coordinatorId,
+    registrationType,
+    minTeamSize,
+    maxTeamSize,
   } = req.body;
 
   // Verify inputs are not empty
@@ -74,8 +118,13 @@ const createEvent = async (req, res) => {
     throw new Error('Please fill in all required event details');
   }
 
-  // Set bannerUrl using req.file.path from multer-storage-cloudinary or fallback from body
-  const finalBannerUrl = req.file ? req.file.path : (bannerUrl || "");
+  // Set registrationBannerUrl using req.file.path from multer-storage-cloudinary or fallback from body
+  const finalBannerUrl = req.file ? req.file.path : (registrationBannerUrl || bannerUrl || "");
+
+  const normalizedRegistrationType = registrationType === 'team' ? 'team' : 'individual';
+  const normalizedMinTeamSize = normalizedRegistrationType === 'team' ? Number(minTeamSize || 2) : 1;
+  const normalizedMaxTeamSize = normalizedRegistrationType === 'team' ? Number(maxTeamSize || 4) : 1;
+  const normalizedRegistrationFee = Number(registrationFee || 0);
 
   const event = await Event.create({
     title,
@@ -86,7 +135,12 @@ const createEvent = async (req, res) => {
     time,
     maxParticipants,
     registrationDeadline,
+    registrationFee: normalizedRegistrationFee,
+    registrationBannerUrl: finalBannerUrl,
     bannerUrl: finalBannerUrl,
+    registrationType: normalizedRegistrationType,
+    minTeamSize: normalizedMinTeamSize,
+    maxTeamSize: normalizedMaxTeamSize,
     coordinatorId: coordinatorId || req.user.id, // Fallback to creator if coordinator not specified
     createdBy: req.user.id,
     status: 'pending', // Fresh events start as pending HOD approval
@@ -154,9 +208,29 @@ const updateEvent = async (req, res) => {
   // If HOD rejected or approved, editing an event might reset it to pending
   req.body.status = 'pending'; // Reset status to pending for review after modification
 
-  // Handle optional banner file upload
+  // Handle optional registration banner upload
   if (req.file && req.file.path) {
+    req.body.registrationBannerUrl = req.file.path;
     req.body.bannerUrl = req.file.path;
+  }
+
+  // Ensure legacy and new banner fields are synchronized
+  if (req.body.registrationBannerUrl && !req.body.bannerUrl) {
+    req.body.bannerUrl = req.body.registrationBannerUrl;
+  }
+  if (req.body.bannerUrl && !req.body.registrationBannerUrl) {
+    req.body.registrationBannerUrl = req.body.bannerUrl;
+  }
+
+  const registrationType = req.body.registrationType === 'team' ? 'team' : 'individual';
+  req.body.registrationType = registrationType;
+  req.body.registrationFee = Number(req.body.registrationFee || 0);
+  if (registrationType === 'team') {
+    req.body.minTeamSize = Number(req.body.minTeamSize || 2);
+    req.body.maxTeamSize = Number(req.body.maxTeamSize || 4);
+  } else {
+    req.body.minTeamSize = 1;
+    req.body.maxTeamSize = 1;
   }
 
   event = await Event.findByIdAndUpdate(req.params.id, req.body, {
@@ -183,23 +257,32 @@ const deleteEvent = async (req, res) => {
     throw new Error('Event not found');
   }
 
-  // Ensure logged-in teacher is the owner of the event
   if (event.createdBy.toString() !== req.user.id) {
     res.status(403);
     throw new Error('Forbidden: You can only delete events you created');
   }
 
-  // Only allow deletion when event is still pending
-  if (event.status && event.status !== 'pending') {
-    res.status(400);
-    throw new Error('Only events with pending status can be deleted');
+  const imageUrls = [event.registrationBannerUrl, event.bannerUrl].filter(Boolean);
+  const galleryItems = await Gallery.find({ eventId: event._id });
+
+  for (const item of galleryItems) {
+    imageUrls.push(item.imageUrl);
   }
+
+  await Promise.all(imageUrls.map((url) => deleteLocalFileIfExists(url)));
+
+  await Promise.all([
+    Registration.deleteMany({ eventId: event._id }),
+    Attendance.deleteMany({ eventId: event._id }),
+    Certificate.deleteMany({ eventId: event._id }),
+    Gallery.deleteMany({ eventId: event._id }),
+  ]);
 
   await event.deleteOne();
 
   res.status(200).json({
     success: true,
-    message: 'Event successfully deleted',
+    message: 'Event and all related records were deleted successfully',
   });
 };
 

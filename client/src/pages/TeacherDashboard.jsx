@@ -8,7 +8,8 @@ import { useToast } from '../hooks/useToast';
 
 const EMPTY_FORM = {
   title: '', category: 'Technical', description: '', venue: '',
-  date: '', time: '', maxParticipants: '', registrationDeadline: '', bannerUrl: '',
+  date: '', time: '', maxParticipants: '', registrationDeadline: '',
+  registrationBannerUrl: '', registrationType: 'individual', minTeamSize: '2', maxTeamSize: '4',
 };
 
 const TeacherDashboard = () => {
@@ -27,7 +28,10 @@ const TeacherDashboard = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
-  const [bannerPreview, setBannerPreview] = useState('');
+  const [registrationBannerPreview, setRegistrationBannerPreview] = useState('');
+  const [paymentStatusMap, setPaymentStatusMap] = useState({});
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [galleryImageCategory, setGalleryImageCategory] = useState('');
   const [attendanceStateMap, setAttendanceStateMap] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -96,7 +100,7 @@ const handleEventSelect = (e) => {
   // Form handlers
   const openCreateForm = () => {
     setEditingEvent(null);
-    setFormData(EMPTY_FORM);
+    setFormData({ ...EMPTY_FORM });
     setShowForm(true);
   };
 
@@ -111,20 +115,22 @@ const handleEventSelect = (e) => {
       time: event.time,
       maxParticipants: event.maxParticipants,
       registrationDeadline: event.registrationDeadline?.split('T')[0] || '',
-      bannerUrl: event.bannerUrl || '',
+      registrationBannerUrl: event.registrationBannerUrl || event.bannerUrl || '',
+      registrationType: event.registrationType || 'individual',
+      minTeamSize: event.minTeamSize || '2',
+      maxTeamSize: event.maxTeamSize || '4',
     });
     setShowForm(true);
   };
 
   const handleFormChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
     const { name, value, files, type } = e.target;
     if (type === 'file' && files && files[0]) {
       const file = files[0];
-      setFormData((f) => ({ ...f, bannerFile: file }));
-      setBannerPreview(URL.createObjectURL(file));
+      setFormData((prev) => ({ ...prev, registrationBannerFile: file }));
+      setRegistrationBannerPreview(URL.createObjectURL(file));
     } else {
-      setFormData({ ...formData, [name]: value });
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
@@ -132,23 +138,43 @@ const handleEventSelect = (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Build multipart form data for banner upload if present
-      const payload = new FormData();
-      Object.entries(formData).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) payload.append(k, v);
-      });
-      // If there's a banner file in state (attached as bannerFile), append it
-      if (formData.bannerFile) {
-        payload.append('banner', formData.bannerFile);
+      const normalizedFormData = { ...formData };
+      if (normalizedFormData.registrationType !== 'team') {
+        normalizedFormData.minTeamSize = '';
+        normalizedFormData.maxTeamSize = '';
       }
 
-      if (editingEvent) {
-        await eventService.updateEvent(editingEvent._id, payload);
-        showToast('Event updated successfully!', 'success');
-      } else {
-        await eventService.createEvent(payload);
-        showToast('Event created and submitted for HOD approval!', 'success');
+      const payload = new FormData();
+      Object.entries(normalizedFormData).forEach(([k, v]) => {
+        if (k !== 'registrationBannerFile' && k !== 'bannerFile' && k !== 'banner' && v !== undefined && v !== null && v !== '') {
+          payload.append(k, v);
+        }
+      });
+
+      // Append banner file under key 'registrationBanner'
+      if (formData.registrationBannerFile) {
+        payload.append('registrationBanner', formData.registrationBannerFile);
       }
+
+      const actionResult = editingEvent
+        ? await eventService.updateEvent(editingEvent._id, payload)
+        : await eventService.createEvent(payload);
+
+      if (galleryFiles.length > 0) {
+        const eventId = editingEvent ? editingEvent._id : actionResult.data._id;
+        const uploadCategory = galleryImageCategory || formData.category || 'Gallery';
+
+        await Promise.all(
+          galleryFiles.map((file) => registrationService.uploadGallery(eventId, uploadCategory, file))
+        );
+      }
+
+      showToast(
+        editingEvent
+          ? 'Event updated successfully!'
+          : 'Event created and submitted for HOD approval!',
+        'success'
+      );
       setShowForm(false);
       await fetchMyEvents();
     } catch (err) {
@@ -180,7 +206,6 @@ const handleEventSelect = (e) => {
   };
 
   const saveBulkAttendance = async () => {
-    // Merge existing status with changes from attendanceStateMap
     const changes = Object.entries(attendanceStateMap).map(([registrationId, status]) => ({ registrationId, status }));
     if (changes.length === 0) {
       showToast('No attendance changes to save', 'warning');
@@ -193,6 +218,17 @@ const handleEventSelect = (e) => {
       if (selectedEventId) fetchParticipants(selectedEventId);
     } catch (err) {
       showToast('Failed to save attendance', 'error');
+    }
+  };
+
+  const handlePaymentStatusUpdate = async (registrationId, paymentStatus) => {
+    try {
+      await registrationService.updatePaymentStatus(registrationId, paymentStatus);
+      setPaymentStatusMap((prev) => ({ ...prev, [registrationId]: paymentStatus }));
+      showToast('Payment status updated.', 'success');
+      if (selectedEventId) fetchParticipants(selectedEventId);
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Payment status update failed.', 'error');
     }
   };
 
@@ -422,8 +458,22 @@ const handleEventSelect = (e) => {
                               <td className="px-4 py-3 text-slate-600 font-mono text-xs uppercase">{p.rollNumber}</td>
                               <td className="px-4 py-3 text-slate-600">{p.department}</td>
                               <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  {/* Present button */}
+                                <div className="flex flex-col gap-2">
+                                  {(selectedEventId && myEvents.find((e) => e._id === selectedEventId)?.registrationFee > 0) && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Payment</span>
+                                      <select
+                                        value={paymentStatusMap[p.registrationId] || (p.paymentStatus || 'pending')}
+                                        onChange={(e) => handlePaymentStatusUpdate(p.registrationId, e.target.value)}
+                                        className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white"
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="paid">Paid</option>
+                                      </select>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    {/* Present button */}
                                   <button
                                     onClick={() => toggleAttendance(p.registrationId, 'present')}
                                     className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${
@@ -455,6 +505,7 @@ const handleEventSelect = (e) => {
                                       Not marked
                                     </span>
                                   )}
+                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -538,6 +589,7 @@ const handleEventSelect = (e) => {
                 <div className="border-2 border-dashed border-slate-200 hover:border-primary rounded-2xl p-6 text-center cursor-pointer transition">
                   <input
                     type="file"
+                    name="image"
                     accept="image/*"
                     onChange={(e) => setGalleryFile(e.target.files[0])}
                     className="hidden"
@@ -637,17 +689,102 @@ const handleEventSelect = (e) => {
                 <input type="date" name="registrationDeadline" value={formData.registrationDeadline} onChange={handleFormChange} required className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm" />
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Fee (₹)</label>
+                <input
+                  type="number"
+                  name="registrationFee"
+                  min="0"
+                  step="1"
+                  value={formData.registrationFee || 0}
+                  onChange={handleFormChange}
+                  placeholder="0 for free"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Type</label>
+                <select
+                  name="registrationType"
+                  value={formData.registrationType}
+                  onChange={handleFormChange}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-white"
+                >
+                  <option value="individual">Individual</option>
+                  <option value="team">Team</option>
+                </select>
+              </div>
+
+              {formData.registrationType === 'team' && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Min Team Size</label>
+                    <input
+                      type="number"
+                      name="minTeamSize"
+                      min="2"
+                      value={formData.minTeamSize}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Max Team Size</label>
+                    <input
+                      type="number"
+                      name="maxTeamSize"
+                      min="2"
+                      value={formData.maxTeamSize}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="md:col-span-2 flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Banner Image (optional)</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Banner Image (optional)</label>
                 <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-3">
-                  {bannerPreview ? (
-                    <img src={bannerPreview} alt="preview" className="w-48 h-28 object-cover rounded-md" />
+                  {registrationBannerPreview ? (
+                    <img src={registrationBannerPreview} alt="preview" className="w-48 h-28 object-cover rounded-md" />
                   ) : (
-                    <div className="text-sm text-slate-500">Drag & drop or click to select an image</div>
+                    <div className="text-sm text-slate-500">Drag & drop or click to select a banner image</div>
                   )}
-                  <input type="file" name="banner" accept="image/*" onChange={handleFormChange} className="hidden" id="banner-file" />
-                  <label htmlFor="banner-file" className="cursor-pointer text-xs font-semibold text-primary">Choose banner image</label>
-                  <input name="bannerUrl" value={formData.bannerUrl} onChange={handleFormChange} placeholder="Or paste image URL (optional)" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm" />
+                  <input type="file" name="registrationBanner" accept="image/*" onChange={handleFormChange} className="hidden" id="registration-banner-file" />
+                  <label htmlFor="registration-banner-file" className="cursor-pointer text-xs font-semibold text-primary">Choose registration banner image</label>
+                  <input name="registrationBannerUrl" value={formData.registrationBannerUrl} onChange={handleFormChange} placeholder="Or paste registration banner URL (optional)" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm" />
+                </div>
+              </div>
+
+              <div className="md:col-span-2 flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gallery Images (optional)</label>
+                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4">
+                  <input
+                    type="file"
+                    name="galleryImages"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                    className="w-full"
+                  />
+                  <input
+                    type="text"
+                    name="galleryImageCategory"
+                    value={galleryImageCategory}
+                    onChange={(e) => setGalleryImageCategory(e.target.value)}
+                    placeholder="Gallery image category (optional)"
+                    className="mt-3 w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-2">
+                    You can also add more gallery images later from the Gallery upload tab.
+                  </p>
+                  {galleryFiles.length > 0 && (
+                    <div className="mt-3 text-sm text-slate-600">
+                      Selected files: {galleryFiles.length}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -98,10 +98,10 @@ const StudentDashboard = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-xs font-black bg-primary/10 text-primary px-2.5 py-1 rounded-full uppercase">
-                          {reg.eventId?.category}
+                          {reg.eventId?.category || 'EVENT'}
                         </span>
                         <h3 className="font-extrabold text-slate-900 mt-2 text-base leading-snug">
-                          {reg.eventId?.title}
+                          {reg.eventId?.title || 'Registered Event'}
                         </h3>
                       </div>
                       <span
@@ -118,9 +118,9 @@ const StudentDashboard = () => {
                     </div>
 
                     <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-3">
-                      <p>📍 Venue: <span className="font-semibold text-slate-700">{reg.eventId?.venue}</span></p>
-                      <p>📅 Date: <span className="font-semibold text-slate-700">{formatDate(reg.eventId?.date)}</span></p>
-                      <p>🕒 Time: <span className="font-semibold text-slate-700">{reg.eventId?.time}</span></p>
+                      <p>📍 Venue: <span className="font-semibold text-slate-700">{reg.eventId?.venue || 'Main Campus'}</span></p>
+                      <p>📅 Date: <span className="font-semibold text-slate-700">{reg.eventId?.date ? formatDate(reg.eventId.date) : 'N/A'}</span></p>
+                      <p>🕒 Time: <span className="font-semibold text-slate-700">{reg.eventId?.time || 'TBD'}</span></p>
                     </div>
 
                     {/* QR Code button trigger */}
@@ -293,9 +293,9 @@ const StudentDashboard = () => {
             </div>
 
             <div className="w-full text-xs text-slate-500 space-y-1 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-              <p>👤 Holder: <span className="font-semibold text-slate-700">{user.name}</span></p>
-              <p>📍 Venue: <span className="font-semibold text-slate-700">{selectedQR.eventId?.venue}</span></p>
-              <p>📅 Schedule: <span className="font-semibold text-slate-700">{formatDate(selectedQR.eventId?.date)} @ {selectedQR.eventId?.time}</span></p>
+              <p>👤 Holder: <span className="font-semibold text-slate-700">{user?.name}</span></p>
+              <p>📍 Venue: <span className="font-semibold text-slate-700">{selectedQR.eventId?.venue || 'Main Campus'}</span></p>
+              <p>📅 Schedule: <span className="font-semibold text-slate-700">{selectedQR.eventId?.date ? formatDate(selectedQR.eventId.date) : 'N/A'} @ {selectedQR.eventId?.time || 'TBD'}</span></p>
             </div>
           </div>
         </div>

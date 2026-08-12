@@ -38,9 +38,33 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'Please specify the registration deadline'],
     },
+    registrationFee: {
+      type: Number,
+      default: 0,
+      min: [0, 'Registration fee cannot be negative'],
+    },
+    registrationBannerUrl: {
+      type: String,
+      default: '',
+    },
     bannerUrl: {
       type: String,
       default: '',
+    },
+    registrationType: {
+      type: String,
+      enum: ['individual', 'team'],
+      default: 'individual',
+    },
+    minTeamSize: {
+      type: Number,
+      default: 2,
+      min: [1, 'Minimum team size must be at least 1'],
+    },
+    maxTeamSize: {
+      type: Number,
+      default: 4,
+      min: [1, 'Maximum team size must be at least 1'],
     },
     status: {
       type: String,

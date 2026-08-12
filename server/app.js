@@ -4,6 +4,7 @@ require('dotenv').config();
 // Core dependencies
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 // Import express-async-errors to handle async routes exceptions automatically
 require('express-async-errors');
@@ -33,6 +34,10 @@ const app = express();
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static uploads folder
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Log basic requests in dev
 if (process.env.NODE_ENV !== 'production') {

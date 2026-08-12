@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import Toast from '../components/common/Toast';
 import SkeletonCard from '../components/common/SkeletonCard';
@@ -58,7 +58,24 @@ const StatCard = ({ label, value, suffix, animate }) => {
   );
 };
 
+const resolveEventBannerUrl = (url) => {
+  if (!url) return '/default-poster.svg';
+
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+
+  if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const backendBase = apiUrl.replace(/\/api\/?$/, '');
+    return `${backendBase}${url.startsWith('/') ? url : `/${url}`}`;
+  }
+
+  return url;
+};
+
 const LandingPage = () => {
+  const location = useLocation();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -66,6 +83,19 @@ const LandingPage = () => {
   const [testimonialIndex, setTestimonialIndex] = useState(0);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const statsRef = useRef(null);
+
+  useEffect(() => {
+    if (location.hash === '#events') {
+      const timer = setTimeout(() => {
+        const target = document.getElementById('events');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash]);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -272,38 +302,67 @@ const LandingPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {events.map((event) => (
-              <div
-                key={event._id}
-                className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col group hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="relative h-44 sm:h-48 overflow-hidden bg-slate-200 dark:bg-slate-700">
-                  <img
-                    src={event.bannerUrl || "/placeholder.jpg"}
-                    alt={event.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                  />
-                  <span className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-white text-xs font-bold px-3 py-1 rounded-full">
-                    {event.category}
-                  </span>
-                </div>
-                <div className="p-5 flex flex-col flex-grow gap-3">
-                  <h3 className="font-bold text-lg text-slate-900 dark:text-white leading-snug group-hover:text-primary transition-colors">
-                    {event.title}
-                  </h3>
-                  <div className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                    <span>📅 {formatDate(event.date)}</span>
-                    <span>📍 {event.venue}</span>
+            {events.map((event) => {
+              const now = new Date();
+              const deadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+              if (deadline && !isNaN(deadline.getTime())) {
+                deadline.setHours(23, 59, 59, 999);
+              }
+              const isExpired = deadline && !isNaN(deadline.getTime()) && now.getTime() > deadline.getTime();
+              const isFull = event.maxParticipants > 0 && (event.registeredCount || 0) >= event.maxParticipants;
+              
+              let statusLabel = 'Registration Open';
+              let statusClass = 'bg-emerald-500/90 text-white';
+              if (isExpired) {
+                statusLabel = 'Registration Closed';
+                statusClass = 'bg-rose-500/90 text-white';
+              } else if (isFull) {
+                statusLabel = 'Event Full';
+                statusClass = 'bg-amber-500/90 text-white';
+              }
+
+              return (
+                <div
+                  key={event._id}
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="relative h-48 sm:h-52 overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img
+                      src={resolveEventBannerUrl(event.registrationBannerUrl || event.bannerUrl || "/default-poster.svg")}
+                      alt={event.title}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "/default-poster.svg";
+                      }}
+                      className="w-full h-full object-contain bg-slate-100 dark:bg-slate-800 p-2 group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                      <span className="bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm backdrop-blur-md">
+                        {event.category}
+                      </span>
+                    </div>
+                    <span className={`absolute top-3 right-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-md ${statusClass}`}>
+                      {statusLabel}
+                    </span>
                   </div>
-                  <Link
-                    to={`/events/${event._id}`}
-                    className="mt-auto w-full text-center bg-primary hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition"
-                  >
-                    Register
-                  </Link>
+                  <div className="p-5 flex flex-col flex-grow gap-3">
+                    <h3 className="font-bold text-lg text-slate-900 dark:text-white leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                      {event.title}
+                    </h3>
+                    <div className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1.5">📅 <span>{formatDate(event.date)}</span></span>
+                      <span className="flex items-center gap-1.5">📍 <span>{event.venue}</span></span>
+                    </div>
+                    <Link
+                      to={`/events/${event._id}`}
+                      className="mt-auto w-full text-center bg-primary hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-md shadow-blue-500/20"
+                    >
+                      {isExpired ? 'View Event Details' : 'Register Now'}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

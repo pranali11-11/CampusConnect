@@ -119,10 +119,32 @@ const getEventRegistrations = async (eventId) => {
   return response.data;
 };
 
+/**
+ * Fetch events by category.
+ */
+const getEventsByCategory = async (category, limit = 3) => {
+  const response = await api.get('/events', {
+    params: { category, limit, status: 'approved' },
+  });
+  return response.data;
+};
+
+/**
+ * Fetch all gallery items.
+ */
+const getGallery = async (category) => {
+  const params = category && category !== 'All' ? { category } : {};
+  const response = await api.get('/gallery', { params });
+  return response.data;
+};
+
 const eventService = {
   getApprovedEvents,
+  getUpcomingEvents,
+  getEventsByCategory,
   getEventById,
   getEventRegistrations,
+  getGallery,
   createEvent,
   updateEvent,
   deleteEvent,

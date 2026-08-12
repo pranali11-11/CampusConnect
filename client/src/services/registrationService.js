@@ -5,8 +5,18 @@ import api from './api';
  * @param {string} eventId - Event ID.
  * @returns {Promise<object>} Created registration.
  */
-const registerForEvent = async (eventId) => {
-  const response = await api.post('/registrations', { eventId });
+const registerForEvent = async (eventId, teamMembers = []) => {
+  const payload = { eventId };
+  if (teamMembers && teamMembers.length > 0) {
+    payload.teamMembers = teamMembers;
+  }
+
+  const response = await api.post('/registrations', payload);
+  return response.data;
+};
+
+const updatePaymentStatus = async (registrationId, paymentStatus) => {
+  const response = await api.patch('/registrations/payment-status', { registrationId, paymentStatus });
   return response.data;
 };
 
@@ -90,11 +100,7 @@ const uploadGallery = async (eventId, category, imageFile) => {
   formData.append('category', category);
   formData.append('image', imageFile);
 
-  const response = await api.post('/gallery/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await api.post('/gallery/upload', formData);
   return response.data;
 };
 
@@ -149,6 +155,7 @@ const getCertificateById = async (id) => {
 
 const registrationService = {
   registerForEvent,
+  updatePaymentStatus,
   getStudentRegistrations,
   getEventParticipants,
   markAttendance,
