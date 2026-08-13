@@ -39,7 +39,7 @@ if (isCloudinaryConfigured()) {
     cloudinary: cloudinary,
     params: {
       folder: 'campusconnect_banners',
-      allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+      allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'avif'],
     },
   });
 } else {

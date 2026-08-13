@@ -10,7 +10,8 @@ const normalizeValue = (value = '') => String(value).trim().toLowerCase();
  * Access: Private (Student only)
  */
 const registerForEvent = async (req, res) => {
-  const { eventId, teamMembers = [] } = req.body;
+  const { eventId, teamMembers = [], transactionId } = req.body;
+  const paymentScreenshot = req.file ? req.file.path : '';
 
   if (!eventId) {
     res.status(400);
@@ -24,6 +25,12 @@ const registerForEvent = async (req, res) => {
   }
 
   const fee = Number(event.registrationFee || 0);
+
+  // For paid events, require transaction ID
+  if (fee > 0 && !transactionId) {
+    res.status(400);
+    throw new Error('Please provide a transaction ID for payment verification');
+  }
 
   const registrationType = event.registrationType || 'individual';
 
@@ -125,6 +132,7 @@ const registerForEvent = async (req, res) => {
   const activeRegistrationsCount = await Registration.countDocuments({
     eventId: eventId,
     status: { $in: ['registered', 'attended'] },
+    ...(fee > 0 ? { paymentStatus: { $in: ['paid', 'free'] } } : {}),
   });
 
   if (activeRegistrationsCount >= event.maxParticipants) {
@@ -147,6 +155,8 @@ const registerForEvent = async (req, res) => {
     status: 'registered',
     paymentStatus: fee > 0 ? 'pending' : 'free',
     paymentAmount: fee,
+    transactionId: transactionId || '',
+    paymentScreenshot: paymentScreenshot || '',
     qrData: 'PENDING_GENERATION',
   });
 
@@ -203,7 +213,7 @@ const updatePaymentStatus = async (req, res) => {
     throw new Error('Please provide a registration ID');
   }
 
-  const validStatuses = ['free', 'pending', 'paid'];
+  const validStatuses = ['free', 'pending', 'paid', 'rejected'];
   if (!validStatuses.includes(paymentStatus)) {
     res.status(400);
     throw new Error('Invalid payment status');
@@ -226,9 +236,18 @@ const updatePaymentStatus = async (req, res) => {
   }
   await registration.save();
 
+  let message;
+  if (paymentStatus === 'paid') {
+    message = `Your payment for "${registration.eventId?.title || 'the event'}" has been verified. Your registration is now confirmed!`;
+  } else if (paymentStatus === 'rejected') {
+    message = `Your payment for "${registration.eventId?.title || 'the event'}" has been rejected. Please contact the event coordinator.`;
+  } else {
+    message = `Your payment status for "${registration.eventId?.title || 'the event'}" has been updated to ${paymentStatus}.`;
+  }
+
   await Notification.create({
     userId: registration.studentId,
-    message: `Your payment status for "${registration.eventId?.title || 'the event'}" has been updated to ${paymentStatus}.`,
+    message,
     type: 'payment_updated',
   });
 

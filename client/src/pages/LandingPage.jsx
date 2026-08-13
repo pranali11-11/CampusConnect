@@ -82,7 +82,10 @@ const LandingPage = () => {
   const [statsVisible, setStatsVisible] = useState(false);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [heroVisible, setHeroVisible] = useState(false);
+  const [eventsVisible, setEventsVisible] = useState(false);
   const statsRef = useRef(null);
+  const eventsRef = useRef(null);
 
   useEffect(() => {
     if (location.hash === '#events') {
@@ -140,6 +143,18 @@ const LandingPage = () => {
   }, []);
 
   useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setEventsVisible(true);
+      },
+      { threshold: 0.1 }
+    );
+
+    if (eventsRef.current) observer.observe(eventsRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     const getTargetDate = () => {
       if (events.length > 0 && events[0].date) {
         return new Date(events[0].date);
@@ -179,6 +194,10 @@ const LandingPage = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    setHeroVisible(true);
+  }, []);
+
   const countdownUnits = [
     { label: 'Days', value: countdown.days },
     { label: 'Hours', value: countdown.hours },
@@ -193,19 +212,19 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-28">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="flex flex-col gap-6 z-10">
-              <span className="inline-flex w-fit items-center gap-2 bg-primary/10 dark:bg-primary/20 text-primary dark:text-secondary text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase">
+              <span className={`inline-flex w-fit items-center gap-2 bg-primary/10 dark:bg-primary/20 text-primary dark:text-secondary text-xs font-bold tracking-widest px-4 py-1.5 rounded-full uppercase ${heroVisible ? 'animate-fade-in-up' : 'opacity-0'}`}>
                 College Event Platform
               </span>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 dark:text-white leading-tight">
+              <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 dark:text-white leading-tight ${heroVisible ? 'animate-fade-in-up animate-delay-100' : 'opacity-0'}`}>
                 Manage College Events{' '}
                 <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
                   Smarter
                 </span>
               </h1>
-              <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-lg">
+              <p className={`text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-lg ${heroVisible ? 'animate-fade-in-up animate-delay-200' : 'opacity-0'}`}>
                 Discover, register, and participate in technical hackathons, cultural fests, sports meets, and workshops — all in one place built for students, teachers, and departments.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className={`flex flex-col sm:flex-row gap-4 ${heroVisible ? 'animate-fade-in-up animate-delay-300' : 'opacity-0'}`}>
                 <a
                   href="#events"
                   className="inline-flex justify-center items-center bg-primary hover:bg-blue-700 text-white font-semibold px-8 py-3.5 rounded-full transition shadow-lg shadow-primary/25"
@@ -222,7 +241,7 @@ const LandingPage = () => {
             </div>
 
             {/* Floating blobs */}
-            <div className="relative h-72 sm:h-80 lg:h-96 flex items-center justify-center">
+            <div className={`relative h-72 sm:h-80 lg:h-96 flex items-center justify-center ${heroVisible ? 'animate-fade-in-right animate-delay-200' : 'opacity-0'}`}>
               <svg className="blob blob-1 absolute w-48 h-48 sm:w-64 sm:h-64 text-primary/30 dark:text-primary/20" viewBox="0 0 200 200">
                 <path fill="currentColor" d="M44.7,-76.4C55.9,-69.2,62.7,-54.1,70.3,-39.6C77.9,-25.1,86.3,-11.2,85.8,2.5C85.3,16.2,75.9,29.7,66.1,42.1C56.3,54.5,46.1,65.8,33.2,73.4C20.3,81,-0.2,84.9,-19.8,80.5C-39.4,76.1,-58.1,63.4,-68.8,46.8C-79.5,30.2,-82.2,9.7,-78.1,-8.9C-74,-27.5,-63.1,-44.2,-49.3,-52.8C-35.5,-61.4,-18.8,-61.9,-2.1,-58.5C14.6,-55.1,33.5,-83.6,44.7,-76.4Z" transform="translate(100 100)" />
               </svg>
@@ -243,15 +262,17 @@ const LandingPage = () => {
       {/* Stats */}
       <section ref={statsRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {STATS.map((stat) => (
-            <StatCard key={stat.label} {...stat} animate={statsVisible} />
+          {STATS.map((stat, index) => (
+            <div key={stat.label} className={statsVisible ? 'animate-fade-in-up' : 'opacity-0'} style={{ animationDelay: `${index * 0.1}s` }}>
+              <StatCard {...stat} animate={statsVisible} />
+            </div>
           ))}
         </div>
       </section>
 
       {/* Countdown */}
       <section className="bg-gradient-to-r from-primary to-accent py-12 px-4">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className={`max-w-4xl mx-auto text-center ${eventsVisible ? 'animate-fade-in-up' : 'opacity-0'}`}>
           <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">
             Next Big Event Starts In
           </h2>
@@ -259,8 +280,8 @@ const LandingPage = () => {
             {events.length > 0 ? events[0].title : 'Upcoming Campus Fest'}
           </p>
           <div className="grid grid-cols-4 gap-3 sm:gap-6 max-w-lg mx-auto">
-            {countdownUnits.map((unit) => (
-              <div key={unit.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 sm:p-4 border border-white/20">
+            {countdownUnits.map((unit, index) => (
+              <div key={unit.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 sm:p-4 border border-white/20" style={{ animationDelay: `${index * 0.1}s` }}>
                 <p className="text-2xl sm:text-4xl font-bold text-white tabular-nums">
                   {String(unit.value).padStart(2, '0')}
                 </p>
@@ -274,8 +295,8 @@ const LandingPage = () => {
       </section>
 
       {/* Upcoming Events */}
-      <section id="events" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
-        <div className="text-center mb-12">
+      <section id="events" ref={eventsRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
+        <div className={`text-center mb-12 ${eventsVisible ? 'animate-fade-in-up' : 'opacity-0'}`}>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white">
             Upcoming Events
           </h2>
@@ -302,7 +323,7 @@ const LandingPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {events.map((event) => {
+            {events.map((event, index) => {
               const now = new Date();
               const deadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
               if (deadline && !isNaN(deadline.getTime())) {
@@ -310,7 +331,7 @@ const LandingPage = () => {
               }
               const isExpired = deadline && !isNaN(deadline.getTime()) && now.getTime() > deadline.getTime();
               const isFull = event.maxParticipants > 0 && (event.registeredCount || 0) >= event.maxParticipants;
-              
+
               let statusLabel = 'Registration Open';
               let statusClass = 'bg-emerald-500/90 text-white';
               if (isExpired) {
@@ -321,10 +342,12 @@ const LandingPage = () => {
                 statusClass = 'bg-amber-500/90 text-white';
               }
 
+              const delayClasses = [`animate-delay-${(index + 1) * 100}`];
+
               return (
                 <div
                   key={event._id}
-                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
+                  className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-300 cursor-pointer ${eventsVisible ? 'animate-fade-in-up' : 'opacity-0'} ${delayClasses.join(' ')}`}
                 >
                   <div className="relative h-48 sm:h-52 overflow-hidden bg-slate-100 dark:bg-slate-800">
                     <img
@@ -369,7 +392,7 @@ const LandingPage = () => {
 
       {/* Testimonials */}
       <section className="bg-white dark:bg-slate-800/50 py-16 md:py-20 px-4">
-        <div className="max-w-3xl mx-auto text-center">
+        <div className={`max-w-3xl mx-auto text-center ${eventsVisible ? 'animate-fade-in-up' : 'opacity-0'}`}>
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-10">
             What Our Community Says
           </h2>

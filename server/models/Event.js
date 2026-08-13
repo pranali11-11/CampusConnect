@@ -43,6 +43,20 @@ const eventSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Registration fee cannot be negative'],
     },
+    paymentNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    whatsappGroupLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    certificateTemplate: {
+      type: String,
+      default: '',
+    },
     registrationBannerUrl: {
       type: String,
       default: '',

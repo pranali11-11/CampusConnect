@@ -60,6 +60,36 @@ const StudentDashboard = () => {
     }
   };
 
+  // Generate certificate for a registration
+  const handleGenerateCertificate = async (registrationId) => {
+    try {
+      const response = await registrationService.generateCertificate(registrationId);
+      if (response.success) {
+        showToast('Certificate generated successfully!', 'success');
+        // Refresh certificates list
+        const certRes = await registrationService.getMyCertificates();
+        if (certRes.success) setCertificates(certRes.data);
+      }
+    } catch (error) {
+      console.error('Certificate generation error:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to generate certificate';
+      showToast(errorMsg, 'error');
+    }
+  };
+
+  // Check if student is eligible for certificate
+  const isCertificateEligible = (registration) => {
+    // Must be attended
+    if (registration.status !== 'attended') return false;
+
+    // Event must have ended
+    const eventDate = new Date(registration.eventId?.date);
+    const now = new Date();
+    if (eventDate > now) return false;
+
+    return true;
+  };
+
   const tabs = [
     { id: 'registrations', label: 'Registered Events', icon: '🎟️' },
     { id: 'certificates', label: 'Certificates', icon: '🎓' },
@@ -123,13 +153,23 @@ const StudentDashboard = () => {
                       <p>🕒 Time: <span className="font-semibold text-slate-700">{reg.eventId?.time || 'TBD'}</span></p>
                     </div>
 
-                    {/* QR Code button trigger */}
-                    <button
-                      onClick={() => setSelectedQR(reg)}
-                      className="mt-auto w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold py-2.5 rounded-xl transition"
-                    >
-                      Show Entry Pass (QR)
-                    </button>
+                    <div className="flex gap-2 mt-auto">
+                      <button
+                        onClick={() => setSelectedQR(reg)}
+                        className="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold py-2.5 rounded-xl transition"
+                      >
+                        Show Entry Pass (QR)
+                      </button>
+                      {isCertificateEligible(reg) && (
+                        <button
+                          onClick={() => handleGenerateCertificate(reg._id)}
+                          className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-extrabold py-2.5 rounded-xl transition"
+                          title="Generate Certificate"
+                        >
+                          🎓 Certificate
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -297,6 +337,18 @@ const StudentDashboard = () => {
               <p>📍 Venue: <span className="font-semibold text-slate-700">{selectedQR.eventId?.venue || 'Main Campus'}</span></p>
               <p>📅 Schedule: <span className="font-semibold text-slate-700">{selectedQR.eventId?.date ? formatDate(selectedQR.eventId.date) : 'N/A'} @ {selectedQR.eventId?.time || 'TBD'}</span></p>
             </div>
+
+            {selectedQR.eventId?.whatsappGroupLink && selectedQR.paymentStatus !== 'pending' && (
+              <a
+                href={selectedQR.eventId.whatsappGroupLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-extrabold py-2.5 rounded-xl transition flex items-center justify-center gap-2"
+              >
+                <span>💬</span>
+                <span>Join WhatsApp Group</span>
+              </a>
+            )}
           </div>
         </div>
       )}

@@ -9,7 +9,7 @@ import { useToast } from '../hooks/useToast';
 const EMPTY_FORM = {
   title: '', category: 'Technical', description: '', venue: '',
   date: '', time: '', maxParticipants: '', registrationDeadline: '',
-  registrationBannerUrl: '', registrationType: 'individual', minTeamSize: '2', maxTeamSize: '4',
+  registrationFee: '', paymentNumber: '', whatsappGroupLink: '', certificateTemplate: '', registrationBannerUrl: '', registrationType: 'individual', minTeamSize: '2', maxTeamSize: '4',
 };
 
 const TeacherDashboard = () => {
@@ -42,6 +42,10 @@ const TeacherDashboard = () => {
   const [galleryFile, setGalleryFile] = useState(null);
   const [galleryCategory, setGalleryCategory] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [myGallery, setMyGallery] = useState([]);
+  const [loadingGallery, setLoadingGallery] = useState(false);
+  const [certificateTemplateFile, setCertificateTemplateFile] = useState(null);
+  const [certificateTemplatePreview, setCertificateTemplatePreview] = useState('');
 
   const fetchMyEvents = useCallback(async () => {
     try {
@@ -59,6 +63,10 @@ const TeacherDashboard = () => {
       try {
         const notifRes = await registrationService.getMyNotifications();
         if (notifRes.success) setNotifications(notifRes.data);
+      } catch { /* silent */ }
+      try {
+        const galleryRes = await registrationService.getMyGallery();
+        if (galleryRes.success) setMyGallery(galleryRes.data);
       } catch { /* silent */ }
       setLoading(false);
     };
@@ -98,13 +106,25 @@ const handleEventSelect = (e) => {
   };
 
   // Form handlers
-  const openCreateForm = () => {
+  const closeForm = () => {
+    setShowForm(false);
     setEditingEvent(null);
+    setFormData(EMPTY_FORM);
+    setRegistrationBannerPreview('');
+    setCertificateTemplateFile(null);
+    setCertificateTemplatePreview('');
+    setGalleryFiles([]);
+    setGalleryImageCategory('');
+  };
+
+  const openCreateForm = () => {
+    closeForm();
     setFormData({ ...EMPTY_FORM });
     setShowForm(true);
   };
 
   const openEditForm = (event) => {
+    closeForm();
     setEditingEvent(event);
     setFormData({
       title: event.title,
@@ -115,6 +135,10 @@ const handleEventSelect = (e) => {
       time: event.time,
       maxParticipants: event.maxParticipants,
       registrationDeadline: event.registrationDeadline?.split('T')[0] || '',
+      registrationFee: event.registrationFee || '',
+      paymentNumber: event.paymentNumber || '',
+      whatsappGroupLink: event.whatsappGroupLink || '',
+      certificateTemplate: event.certificateTemplate || '',
       registrationBannerUrl: event.registrationBannerUrl || event.bannerUrl || '',
       registrationType: event.registrationType || 'individual',
       minTeamSize: event.minTeamSize || '2',
@@ -127,8 +151,13 @@ const handleEventSelect = (e) => {
     const { name, value, files, type } = e.target;
     if (type === 'file' && files && files[0]) {
       const file = files[0];
-      setFormData((prev) => ({ ...prev, registrationBannerFile: file }));
-      setRegistrationBannerPreview(URL.createObjectURL(file));
+      if (name === 'registrationBanner') {
+        setFormData((prev) => ({ ...prev, registrationBannerFile: file }));
+        setRegistrationBannerPreview(URL.createObjectURL(file));
+      } else if (name === 'certificateTemplate') {
+        setCertificateTemplateFile(file);
+        setCertificateTemplatePreview(URL.createObjectURL(file));
+      }
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -154,6 +183,11 @@ const handleEventSelect = (e) => {
       // Append banner file under key 'registrationBanner'
       if (formData.registrationBannerFile) {
         payload.append('registrationBanner', formData.registrationBannerFile);
+      }
+
+      // Append certificate template file under key 'certificateTemplate'
+      if (certificateTemplateFile) {
+        payload.append('certificateTemplate', certificateTemplateFile);
       }
 
       const actionResult = editingEvent
@@ -246,20 +280,48 @@ const handleEventSelect = (e) => {
   // Gallery upload
   const handleGalleryUpload = async (e) => {
     e.preventDefault();
-    if (!galleryFile || !galleryEventId) {
-      showToast('Please select an event and a photo.', 'warning');
+    if (!galleryEventId || !galleryFile) {
+      showToast('Please select an event and an image file.', 'warning');
       return;
     }
+
     setUploading(true);
     try {
-      await registrationService.uploadGallery(galleryEventId, galleryCategory, galleryFile);
-      showToast('Photo uploaded to gallery!', 'success');
-      setGalleryFile(null);
-      setGalleryCategory('');
+      const formData = new FormData();
+      formData.append('eventId', galleryEventId);
+      formData.append('category', galleryCategory);
+      formData.append('image', galleryFile);
+
+      const res = await registrationService.uploadGallery(galleryEventId, galleryCategory, galleryFile);
+      if (res.success) {
+        showToast('Photo uploaded successfully!', 'success');
+        setGalleryEventId('');
+        setGalleryFile(null);
+        setGalleryCategory('');
+        // Refresh gallery
+        const galleryRes = await registrationService.getMyGallery();
+        if (galleryRes.success) setMyGallery(galleryRes.data);
+      }
     } catch (err) {
-      showToast(err.response?.data?.error || 'Upload failed.', 'error');
+      console.error('Gallery upload error:', err);
+      const errorMsg = err.response?.data?.error || err.message || 'Upload failed. Please try again.';
+      showToast(errorMsg, 'error');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleGalleryDelete = async (galleryId) => {
+    if (!confirm('Are you sure you want to delete this image?')) return;
+
+    try {
+      const res = await registrationService.deleteGalleryItem(galleryId);
+      if (res.success) {
+        showToast('Image deleted successfully!', 'success');
+        setMyGallery((prev) => prev.filter((item) => item._id !== galleryId));
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Delete failed', 'error');
     }
   };
 
@@ -460,16 +522,34 @@ const handleEventSelect = (e) => {
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   {(selectedEventId && myEvents.find((e) => e._id === selectedEventId)?.registrationFee > 0) && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Payment</span>
-                                      <select
-                                        value={paymentStatusMap[p.registrationId] || (p.paymentStatus || 'pending')}
-                                        onChange={(e) => handlePaymentStatusUpdate(p.registrationId, e.target.value)}
-                                        className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white"
-                                      >
-                                        <option value="pending">Pending</option>
-                                        <option value="paid">Paid</option>
-                                      </select>
+                                    <div className="flex flex-col gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Payment</span>
+                                        <select
+                                          value={paymentStatusMap[p.registrationId] || (p.paymentStatus || 'pending')}
+                                          onChange={(e) => handlePaymentStatusUpdate(p.registrationId, e.target.value)}
+                                          className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white"
+                                        >
+                                          <option value="pending">Pending</option>
+                                          <option value="paid">Paid ✓</option>
+                                          <option value="rejected">Rejected ✗</option>
+                                        </select>
+                                      </div>
+                                      {p.transactionId && (
+                                        <div className="text-[10px] text-slate-500">
+                                          <span className="font-semibold">TXN:</span> {p.transactionId}
+                                        </div>
+                                      )}
+                                      {p.paymentScreenshot && (
+                                        <a
+                                          href={p.paymentScreenshot.startsWith('http') ? p.paymentScreenshot : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${p.paymentScreenshot}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[10px] text-blue-600 hover:underline flex items-center gap-1"
+                                        >
+                                          📸 View Screenshot
+                                        </a>
+                                      )}
                                     </div>
                                   )}
                                   <div className="flex items-center gap-2">
@@ -557,7 +637,7 @@ const handleEventSelect = (e) => {
         {activeTab === 'gallery' && (
           <div>
             <h2 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-4 mb-6">🖼️ Upload Event Photos</h2>
-            <form onSubmit={handleGalleryUpload} className="max-w-lg flex flex-col gap-5">
+            <form onSubmit={handleGalleryUpload} className="max-w-lg flex flex-col gap-5 mb-8">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Event</label>
                 <select
@@ -613,6 +693,40 @@ const handleEventSelect = (e) => {
                 {uploading ? 'Uploading to Cloud...' : 'Upload Photo'}
               </button>
             </form>
+
+            {/* My Gallery */}
+            <div className="mt-8">
+              <h3 className="text-lg font-bold text-slate-800 mb-4">📸 My Uploaded Photos</h3>
+              {myGallery.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-slate-500">No photos uploaded yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {myGallery.map((item) => (
+                    <div key={item._id} className="relative group rounded-xl overflow-hidden shadow-sm border border-slate-200">
+                      <img
+                        src={item.imageUrl.startsWith('http') ? item.imageUrl : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${item.imageUrl}`}
+                        alt={item.category || 'Gallery image'}
+                        className="w-full h-32 object-cover"
+                      />
+                      <button
+                        onClick={() => handleGalleryDelete(item._id)}
+                        className="absolute top-2 right-2 bg-rose-500 hover:bg-rose-600 text-white p-2 rounded-lg transition shadow-md z-10"
+                        title="Delete image"
+                      >
+                        🗑️
+                      </button>
+                      {item.category && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate">
+                          {item.category}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -644,8 +758,8 @@ const handleEventSelect = (e) => {
 
       {/* ── CREATE / EDIT EVENT MODAL ── */}
       {showForm && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl p-8 max-w-2xl w-full border border-slate-100 shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm p-4 sm:p-6">
+          <div className="mx-auto my-4 w-full max-w-2xl rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl sm:p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black text-slate-800">{editingEvent ? '✏️ Edit Event' : '✨ Create New Event'}</h3>
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
@@ -703,6 +817,32 @@ const handleEventSelect = (e) => {
                 />
               </div>
 
+              {(formData.registrationFee > 0 || formData.registrationFee === '') && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Payment Number / UPI ID</label>
+                  <input
+                    type="text"
+                    name="paymentNumber"
+                    value={formData.paymentNumber || ''}
+                    onChange={handleFormChange}
+                    placeholder="e.g. 9876543210 or user@upi"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">WhatsApp Group Link (optional)</label>
+                <input
+                  type="url"
+                  name="whatsappGroupLink"
+                  value={formData.whatsappGroupLink || ''}
+                  onChange={handleFormChange}
+                  placeholder="https://chat.whatsapp.com/..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                />
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Type</label>
                 <select
@@ -755,6 +895,20 @@ const handleEventSelect = (e) => {
                   <input type="file" name="registrationBanner" accept="image/*" onChange={handleFormChange} className="hidden" id="registration-banner-file" />
                   <label htmlFor="registration-banner-file" className="cursor-pointer text-xs font-semibold text-primary">Choose registration banner image</label>
                   <input name="registrationBannerUrl" value={formData.registrationBannerUrl} onChange={handleFormChange} placeholder="Or paste registration banner URL (optional)" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm" />
+                </div>
+              </div>
+
+              <div className="md:col-span-2 flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Certificate Template (optional)</label>
+                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-3">
+                  {certificateTemplatePreview ? (
+                    <img src={certificateTemplatePreview} alt="Certificate template preview" className="w-48 h-32 object-cover rounded-md" />
+                  ) : (
+                    <div className="text-sm text-slate-500">Upload a certificate background template (JPG/PNG) with space for student name</div>
+                  )}
+                  <input type="file" name="certificateTemplate" accept="image/*" onChange={handleFormChange} className="hidden" id="certificate-template-file" />
+                  <label htmlFor="certificate-template-file" className="cursor-pointer text-xs font-semibold text-primary">Choose certificate template</label>
+                  <input name="certificateTemplate" value={formData.certificateTemplate} onChange={handleFormChange} placeholder="Or paste certificate template URL (optional)" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm" />
                 </div>
               </div>
 

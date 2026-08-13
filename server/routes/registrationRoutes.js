@@ -8,12 +8,13 @@ const {
 } = require('../controllers/registrationController');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
+const { uploadBanner, normalizeFilePath } = require('../config/cloudinary');
 
 // All registration routes require authentication
 router.use(protect);
 
 // Student registration endpoints
-router.post('/', roleMiddleware('student'), registerForEvent);
+router.post('/', roleMiddleware('student'), uploadBanner.single('paymentScreenshot'), normalizeFilePath, registerForEvent);
 router.patch('/payment-status', roleMiddleware('teacher', 'hod'), updatePaymentStatus);
 router.get('/my', roleMiddleware('student'), getStudentRegistrations);
 

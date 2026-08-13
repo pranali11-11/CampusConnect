@@ -3,15 +3,36 @@ import api from './api';
 /**
  * Register student for an event.
  * @param {string} eventId - Event ID.
+ * @param {Array} teamMembers - Team members for team registration.
+ * @param {string} transactionId - Transaction ID for paid events.
+ * @param {File} paymentScreenshot - Payment screenshot image file.
  * @returns {Promise<object>} Created registration.
  */
-const registerForEvent = async (eventId, teamMembers = []) => {
+const registerForEvent = async (eventId, teamMembers = [], transactionId = '', paymentScreenshot = null) => {
   const payload = { eventId };
   if (teamMembers && teamMembers.length > 0) {
     payload.teamMembers = teamMembers;
   }
+  if (transactionId) {
+    payload.transactionId = transactionId;
+  }
 
-  const response = await api.post('/registrations', payload);
+  let response;
+  if (paymentScreenshot) {
+    // If screenshot is provided, use FormData
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    formData.append('paymentScreenshot', paymentScreenshot);
+    response = await api.post('/registrations', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  } else {
+    response = await api.post('/registrations', payload);
+  }
   return response.data;
 };
 
@@ -144,6 +165,16 @@ const getMyCertificates = async () => {
 };
 
 /**
+ * Generate certificate for a registration.
+ * @param {string} registrationId - Registration ID.
+ * @returns {Promise<object>} Generated certificate.
+ */
+const generateCertificate = async (registrationId) => {
+  const response = await api.post('/certificates/generate', { registrationId });
+  return response.data;
+};
+
+/**
  * Get specific certificate by ID.
  * @param {string} id - Certificate ID.
  * @returns {Promise<object>} Certificate details.
@@ -168,9 +199,10 @@ const registrationService = {
   deleteGalleryItem,
   submitContact,
   getMyCertificates,
+  generateCertificate,
   getCertificateById,
   markAttendanceBulk,
-  
+
 };
 
 export default registrationService;

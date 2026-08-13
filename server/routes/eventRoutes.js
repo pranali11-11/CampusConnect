@@ -17,6 +17,12 @@ const { uploadBanner, normalizeFilePath } = require('../config/cloudinary');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
+// Create multer instance that can handle multiple fields
+const uploadFields = uploadBanner.fields([
+  { name: 'registrationBanner', maxCount: 1 },
+  { name: 'certificateTemplate', maxCount: 1 }
+]);
+
 // Public route to view approved events
 router.get('/', getApprovedEvents);
 
@@ -36,8 +42,8 @@ router.get('/upcoming', getUpcomingEvents);
 router.get('/:id', getEventById);
 
 // Protected routes (for mutations and approvals)
-router.post('/', protect, roleMiddleware('teacher'), uploadBanner.single('registrationBanner'), normalizeFilePath, createEvent);
-router.put('/:id', protect, roleMiddleware('teacher'), uploadBanner.single('registrationBanner'), normalizeFilePath, updateEvent);
+router.post('/', protect, roleMiddleware('teacher'), uploadFields, normalizeFilePath, createEvent);
+router.put('/:id', protect, roleMiddleware('teacher'), uploadFields, normalizeFilePath, updateEvent);
 router.delete('/:id', protect, roleMiddleware('teacher'), deleteEvent);
 
 // HOD Approval/Rejection routes

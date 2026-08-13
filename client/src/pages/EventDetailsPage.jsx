@@ -44,6 +44,9 @@ const EventDetailsPage = () => {
   const [countdown, setCountdown] = useState('');
   const [relatedEvents, setRelatedEvents] = useState([]);
   const [teamMembers, setTeamMembers] = useState([{ name: '', email: '' }]);
+  const [transactionId, setTransactionId] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [paymentScreenshotPreview, setPaymentScreenshotPreview] = useState('');
   const qrRef = useRef();
 
   // Sample data for schedule, speakers
@@ -160,6 +163,14 @@ const EventDetailsPage = () => {
       return;
     }
 
+    const fee = event?.registrationFee || 0;
+
+    // For paid events, require transaction ID
+    if (fee > 0 && !transactionId.trim()) {
+      showToast('Please enter transaction ID for payment verification', 'warning');
+      return;
+    }
+
     if (event?.registrationType === 'team') {
       const validMembers = teamMembers.filter((member) => member.name.trim() || member.email.trim());
       if (validMembers.length + 1 < (event.minTeamSize || 2) || validMembers.length + 1 > (event.maxTeamSize || 4)) {
@@ -178,14 +189,20 @@ const EventDetailsPage = () => {
     try {
       const res = await registrationService.registerForEvent(
         id,
-        event?.registrationType === 'team' ? teamMembers.filter((member) => member.name.trim() && member.email.trim()) : []
+        event?.registrationType === 'team' ? teamMembers.filter((member) => member.name.trim() && member.email.trim()) : [],
+        transactionId,
+        paymentScreenshot
       );
       if (res.success) {
         setRegistrationData(res.data);
         setShowQRModal(true);
         setIsRegistered(true);
         setRegistrationCount(prev => prev + 1);
-        showToast('Successfully registered!', 'success');
+        if (fee > 0) {
+          showToast('Registration submitted! Payment verification pending.', 'success');
+        } else {
+          showToast('Successfully registered!', 'success');
+        }
       }
     } catch (err) {
       showToast(err.response?.data?.error || 'Registration failed', 'error');
@@ -534,6 +551,62 @@ const EventDetailsPage = () => {
               </div>
             )}
 
+            {/* Payment Info for Paid Events */}
+            {event?.registrationFee > 0 && (
+              <div className="space-y-3 border border-amber-200 dark:border-amber-700 rounded-xl p-3 bg-amber-50 dark:bg-amber-950/30">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">💰 Payment Required</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Registration Fee: <span className="font-bold text-amber-700 dark:text-amber-300">₹{event.registrationFee}</span>
+                </p>
+                {event.paymentNumber ? (
+                  <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border-2 border-amber-300 dark:border-amber-600">
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">📱 Pay to this number/UPI ID:</p>
+                    <p className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{event.paymentNumber}</p>
+                  </div>
+                ) : (
+                  <div className="bg-rose-50 dark:bg-rose-950/30 rounded-lg p-3 border border-rose-200 dark:border-rose-700">
+                    <p className="text-xs text-rose-700 dark:text-rose-300">
+                      ⚠️ Payment contact not set by event organizer. Please contact them for payment details.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    placeholder="Enter Transaction ID / UPI Reference *"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-2 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setPaymentScreenshot(file);
+                          setPaymentScreenshotPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                      id="payment-screenshot"
+                    />
+                    <label htmlFor="payment-screenshot" className="cursor-pointer">
+                      {paymentScreenshotPreview ? (
+                        <img src={paymentScreenshotPreview} alt="Payment proof" className="w-full h-24 object-cover rounded" />
+                      ) : (
+                        <div className="text-xs text-slate-500">
+                          <span className="text-lg">📸</span>
+                          <p>Upload payment screenshot (optional)</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Register Button */}
             <button
               onClick={handleRegister}
@@ -585,7 +658,9 @@ const EventDetailsPage = () => {
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-sm w-full">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Registration Successful! 🎉</h2>
+              <h2 className="text-2xl font-bold">
+                {registrationData.paymentStatus === 'pending' ? 'Registration Submitted! ⏳' : 'Registration Successful! 🎉'}
+              </h2>
               <button
                 onClick={() => setShowQRModal(false)}
                 className="text-2xl hover:text-slate-600"
@@ -594,39 +669,83 @@ const EventDetailsPage = () => {
               </button>
             </div>
 
-            <div className="text-center mb-6">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Your QR Code</p>
-              <div ref={qrRef} className="flex justify-center">
-                <QRCodeCanvas
-
-                  value={JSON.stringify({
-                    registrationId: registrationData._id,
-                    studentId: user?.id,
-                    eventId: event._id,
-                  })}
-                  size={200}
-                  level="H"
-                  includeMargin
-                />
+            {registrationData.paymentStatus === 'pending' ? (
+              <div className="text-center mb-6">
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
+                  <p className="text-amber-800 dark:text-amber-200 font-semibold mb-2">⏳ Payment Pending</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Your registration has been submitted and is pending payment verification. You will receive your QR code once the payment is confirmed by the event coordinator.
+                  </p>
+                </div>
+                <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 text-sm">
+                  <p className="text-slate-600 dark:text-slate-300 mb-1">
+                    <strong>Name:</strong> {user?.name}
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    <strong>Event:</strong> {event.title}
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    <strong>Transaction ID:</strong> {transactionId}
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center mb-6">
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Your QR Code</p>
+                <div ref={qrRef} className="flex justify-center">
+                  <QRCodeCanvas
 
-            <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 mb-6 text-sm">
-              <p className="text-slate-600 dark:text-slate-300 mb-1">
-                <strong>Name:</strong> {user?.name}
-              </p>
-              <p className="text-slate-600 dark:text-slate-300">
-                <strong>Event:</strong> {event.title}
-              </p>
-            </div>
+                    value={JSON.stringify({
+                      registrationId: registrationData._id,
+                      studentId: user?.id,
+                      eventId: event._id,
+                    })}
+                    size={200}
+                    level="H"
+                    includeMargin
+                  />
+                </div>
+              </div>
+            )}
+
+            {registrationData.paymentStatus !== 'pending' && (
+              <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 mb-6 text-sm">
+                <p className="text-slate-600 dark:text-slate-300 mb-1">
+                  <strong>Name:</strong> {user?.name}
+                </p>
+                <p className="text-slate-600 dark:text-slate-300">
+                  <strong>Event:</strong> {event.title}
+                </p>
+              </div>
+            )}
+
+            {event.whatsappGroupLink && registrationData.paymentStatus !== 'pending' && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-4 mb-6 text-sm">
+                <p className="text-emerald-800 dark:text-emerald-200 font-semibold mb-2">📱 Join the WhatsApp Group</p>
+                <p className="text-slate-600 dark:text-slate-400 mb-3">
+                  Stay updated with event announcements and connect with other participants.
+                </p>
+                <a
+                  href={event.whatsappGroupLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-2 rounded-lg transition"
+                >
+                  <span>💬</span>
+                  <span>Join WhatsApp Group</span>
+                </a>
+              </div>
+            )}
 
             <div className="space-y-3">
-              <button
-                onClick={downloadQR}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition"
-              >
-                📥 Download QR Code
-              </button>
+              {registrationData.paymentStatus !== 'pending' && (
+                <button
+                  onClick={downloadQR}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition"
+                >
+                  📥 Download QR Code
+                </button>
+              )}
 
               <button
                 onClick={() => {

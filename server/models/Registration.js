@@ -39,12 +39,21 @@ const registrationSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['free', 'pending', 'paid'],
+    enum: ['free', 'pending', 'paid', 'rejected'],
     default: 'free',
   },
   paymentAmount: {
     type: Number,
     default: 0,
+  },
+  transactionId: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  paymentScreenshot: {
+    type: String,
+    default: '',
   },
   registeredAt: {
     type: Date,

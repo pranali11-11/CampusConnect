@@ -118,8 +118,9 @@ const createEvent = async (req, res) => {
     throw new Error('Please fill in all required event details');
   }
 
-  // Set registrationBannerUrl using req.file.path from multer-storage-cloudinary or fallback from body
-  const finalBannerUrl = req.file ? req.file.path : (registrationBannerUrl || bannerUrl || "");
+  // Set registrationBannerUrl using req.files from multer-storage-cloudinary or fallback from body
+  const finalBannerUrl = req.files?.registrationBanner?.[0]?.path || (registrationBannerUrl || bannerUrl || "");
+  const finalCertificateTemplate = req.files?.certificateTemplate?.[0]?.path || (req.body.certificateTemplate || "");
 
   const normalizedRegistrationType = registrationType === 'team' ? 'team' : 'individual';
   const normalizedMinTeamSize = normalizedRegistrationType === 'team' ? Number(minTeamSize || 2) : 1;
@@ -136,6 +137,9 @@ const createEvent = async (req, res) => {
     maxParticipants,
     registrationDeadline,
     registrationFee: normalizedRegistrationFee,
+    paymentNumber: req.body.paymentNumber || '',
+    whatsappGroupLink: req.body.whatsappGroupLink || '',
+    certificateTemplate: finalCertificateTemplate,
     registrationBannerUrl: finalBannerUrl,
     bannerUrl: finalBannerUrl,
     registrationType: normalizedRegistrationType,
@@ -205,13 +209,18 @@ const updateEvent = async (req, res) => {
     throw new Error('Forbidden: You can only edit events you created');
   }
 
-  // If HOD rejected or approved, editing an event might reset it to pending
-  req.body.status = 'pending'; // Reset status to pending for review after modification
+  // Don't reset status to pending on update - only new events need HOD approval
+  // Keep existing status (approved, rejected, or pending)
 
   // Handle optional registration banner upload
-  if (req.file && req.file.path) {
-    req.body.registrationBannerUrl = req.file.path;
-    req.body.bannerUrl = req.file.path;
+  if (req.files?.registrationBanner?.[0]?.path) {
+    req.body.registrationBannerUrl = req.files.registrationBanner[0].path;
+    req.body.bannerUrl = req.files.registrationBanner[0].path;
+  }
+
+  // Handle optional certificate template upload
+  if (req.files?.certificateTemplate?.[0]?.path) {
+    req.body.certificateTemplate = req.files.certificateTemplate[0].path;
   }
 
   // Ensure legacy and new banner fields are synchronized
@@ -225,6 +234,8 @@ const updateEvent = async (req, res) => {
   const registrationType = req.body.registrationType === 'team' ? 'team' : 'individual';
   req.body.registrationType = registrationType;
   req.body.registrationFee = Number(req.body.registrationFee || 0);
+  req.body.paymentNumber = req.body.paymentNumber || '';
+  req.body.whatsappGroupLink = req.body.whatsappGroupLink || '';
   if (registrationType === 'team') {
     req.body.minTeamSize = Number(req.body.minTeamSize || 2);
     req.body.maxTeamSize = Number(req.body.maxTeamSize || 4);
