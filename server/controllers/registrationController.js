@@ -1,6 +1,7 @@
 const Registration = require('../models/Registration');
 const Event = require('../models/Event');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 
 const normalizeValue = (value = '') => String(value).trim().toLowerCase();
 
@@ -12,6 +13,16 @@ const normalizeValue = (value = '') => String(value).trim().toLowerCase();
 const registerForEvent = async (req, res) => {
   const { eventId, teamMembers = [], transactionId } = req.body;
   const paymentScreenshot = req.file ? req.file.path : '';
+  let parsedTeamMembers = teamMembers;
+
+  if (typeof parsedTeamMembers === 'string') {
+    try {
+      parsedTeamMembers = JSON.parse(parsedTeamMembers);
+    } catch {
+      res.status(400);
+      throw new Error('Team member details are invalid.');
+    }
+  }
 
   if (!eventId) {
     res.status(400);
@@ -30,6 +41,16 @@ const registerForEvent = async (req, res) => {
   if (fee > 0 && !transactionId) {
     res.status(400);
     throw new Error('Please provide a transaction ID for payment verification');
+  }
+
+  if (fee > 0 && !/^\d{12}$/.test(String(transactionId).trim())) {
+    res.status(400);
+    throw new Error('Transaction ID must be exactly 12 digits');
+  }
+
+  if (fee > 0 && !paymentScreenshot) {
+    res.status(400);
+    throw new Error('Please upload a payment screenshot for verification');
   }
 
   const registrationType = event.registrationType || 'individual';
@@ -61,7 +82,7 @@ const registerForEvent = async (req, res) => {
   }
 
   if (registrationType === 'team') {
-    const safeMembers = Array.isArray(teamMembers) ? teamMembers : [];
+    const safeMembers = Array.isArray(parsedTeamMembers) ? parsedTeamMembers : [];
     const totalMembers = safeMembers.length + 1;
     const minTeamSize = Number(event.minTeamSize || 2);
     const maxTeamSize = Number(event.maxTeamSize || 4);
@@ -99,22 +120,22 @@ const registerForEvent = async (req, res) => {
         throw new Error('Each team member must include a name and email.');
       }
     }
-  } else if (teamMembers && teamMembers.length > 0) {
+  } else if (parsedTeamMembers && parsedTeamMembers.length > 0) {
     res.status(400);
     throw new Error('This event accepts individual registrations only.');
   }
 
-  const normalizedEmails = [req.user.email, ...(Array.isArray(teamMembers) ? teamMembers.map((member) => member.email) : [])]
+  const normalizedEmails = [req.user.email, ...(Array.isArray(parsedTeamMembers) ? parsedTeamMembers.map((member) => member.email) : [])]
     .filter(Boolean)
     .map((email) => normalizeValue(email));
 
-  const normalizedNames = [req.user.name, ...(Array.isArray(teamMembers) ? teamMembers.map((member) => member.name) : [])]
+  const normalizedNames = [req.user.name, ...(Array.isArray(parsedTeamMembers) ? parsedTeamMembers.map((member) => member.name) : [])]
     .filter(Boolean)
     .map((name) => normalizeValue(name));
 
   const existingRegistration = await Registration.findOne({
     eventId,
-    status: { $in: ['registered', 'attended'] },
+    status: { $in: ['pending_approval', 'registered', 'attended'] },
     $or: [
       { studentId: req.user.id },
       { teamLeadId: req.user.id },
@@ -145,14 +166,21 @@ const registerForEvent = async (req, res) => {
     teamLeadId: req.user.id,
     eventId: eventId,
     registrationType,
-    teamMembers: Array.isArray(teamMembers)
-      ? teamMembers.map((member) => ({
-          name: member.name,
-          email: member.email,
-          studentId: member.studentId || null,
+    teamMembers: Array.isArray(parsedTeamMembers)
+      ? await Promise.all(parsedTeamMembers.map(async (member) => {
+          const matchedUser = await User.findOne({ email: normalizeValue(member.email) }).select('_id');
+          if (!matchedUser && !member.studentId) {
+            res.status(400);
+            throw new Error(`No CampusConnect account found for teammate ${member.email}.`);
+          }
+          return {
+            name: member.name,
+            email: member.email,
+            studentId: member.studentId || matchedUser._id,
+          };
         }))
       : [],
-    status: 'registered',
+    status: fee > 0 ? 'pending_approval' : 'registered',
     paymentStatus: fee > 0 ? 'pending' : 'free',
     paymentAmount: fee,
     transactionId: transactionId || '',
@@ -231,6 +259,11 @@ const updatePaymentStatus = async (req, res) => {
   }
 
   registration.paymentStatus = paymentStatus;
+  if (paymentStatus === 'paid' || paymentStatus === 'free') {
+    registration.status = 'registered';
+  } else if (paymentStatus === 'rejected') {
+    registration.status = 'rejected';
+  }
   if (paymentStatus === 'paid') {
     registration.paymentAmount = Math.max(registration.paymentAmount || 0, 0);
   }
@@ -290,9 +323,97 @@ const getEventParticipants = async (req, res) => {
   });
 };
 
+/**
+ * Approve a registration request
+ * PATCH /api/registrations/:registrationId/approve
+ * Access: Private (Teacher / HOD)
+ */
+const approveRegistration = async (req, res) => {
+  const { registrationId } = req.params;
+
+  const registration = await Registration.findById(registrationId)
+    .populate('eventId');
+
+  if (!registration) {
+    res.status(404);
+    throw new Error('Registration not found');
+  }
+
+  // Check permission
+  if (req.user.role !== 'hod' && registration.eventId.createdBy.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Forbidden: You are not authorized to approve this registration');
+  }
+
+  registration.status = 'registered';
+  await registration.save();
+
+  // Notify student
+  try {
+    await Notification.create({
+      userId: registration.studentId,
+      message: `Your registration for "${registration.eventId.title}" has been approved.`,
+      type: 'registration_approved',
+    });
+  } catch (err) {
+    console.error('Failed to notify student:', err.message);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Registration approved',
+    data: registration,
+  });
+};
+
+/**
+ * Reject a registration request
+ * PATCH /api/registrations/:registrationId/reject
+ * Access: Private (Teacher / HOD)
+ */
+const rejectRegistration = async (req, res) => {
+  const { registrationId } = req.params;
+
+  const registration = await Registration.findById(registrationId)
+    .populate('eventId');
+
+  if (!registration) {
+    res.status(404);
+    throw new Error('Registration not found');
+  }
+
+  // Check permission
+  if (req.user.role !== 'hod' && registration.eventId.createdBy.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Forbidden: You are not authorized to reject this registration');
+  }
+
+  registration.status = 'rejected';
+  await registration.save();
+
+  // Notify student
+  try {
+    await Notification.create({
+      userId: registration.studentId,
+      message: `Your registration for "${registration.eventId.title}" has been rejected.`,
+      type: 'registration_rejected',
+    });
+  } catch (err) {
+    console.error('Failed to notify student:', err.message);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Registration rejected',
+    data: registration,
+  });
+};
+
 module.exports = {
   registerForEvent,
   getStudentRegistrations,
   updatePaymentStatus,
   getEventParticipants,
+  approveRegistration,
+  rejectRegistration,
 };

@@ -49,6 +49,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Mount Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/events', eventRegistrationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -57,7 +58,6 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/events', eventRegistrationRoutes);
 
 // Root route check
 app.get('/', (req, res) => {

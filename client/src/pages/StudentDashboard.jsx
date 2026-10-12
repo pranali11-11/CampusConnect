@@ -140,10 +140,14 @@ const StudentDashboard = () => {
                             ? 'bg-emerald-100 text-emerald-800'
                             : reg.status === 'cancelled'
                             ? 'bg-slate-200 text-slate-600'
+                            : reg.status === 'pending_approval'
+                            ? 'bg-amber-100 text-amber-800'
+                            : reg.status === 'rejected'
+                            ? 'bg-rose-100 text-rose-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {reg.status}
+                        {reg.status === 'pending_approval' ? 'Pending Approval' : reg.status}
                       </span>
                     </div>
 
@@ -154,12 +158,22 @@ const StudentDashboard = () => {
                     </div>
 
                     <div className="flex gap-2 mt-auto">
-                      <button
-                        onClick={() => setSelectedQR(reg)}
-                        className="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold py-2.5 rounded-xl transition"
-                      >
-                        Show Entry Pass (QR)
-                      </button>
+                      {reg.status === 'registered' || reg.status === 'attended' ? (
+                        <button
+                          onClick={() => setSelectedQR(reg)}
+                          className="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold py-2.5 rounded-xl transition"
+                        >
+                          Show Entry Pass (QR)
+                        </button>
+                      ) : reg.status === 'pending_approval' ? (
+                        <div className="flex-1 text-center text-xs text-amber-700 font-semibold py-2.5">
+                          Awaiting Teacher Approval
+                        </div>
+                      ) : reg.status === 'rejected' ? (
+                        <div className="flex-1 text-center text-xs text-rose-700 font-semibold py-2.5">
+                          Registration Rejected
+                        </div>
+                      ) : null}
                       {isCertificateEligible(reg) && (
                         <button
                           onClick={() => handleGenerateCertificate(reg._id)}

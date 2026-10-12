@@ -22,7 +22,7 @@ const registerForEvent = async (eventId, teamMembers = [], transactionId = '', p
     // If screenshot is provided, use FormData
     const formData = new FormData();
     Object.entries(payload).forEach(([key, value]) => {
-      formData.append(key, value);
+      formData.append(key, key === 'teamMembers' ? JSON.stringify(value) : value);
     });
     formData.append('paymentScreenshot', paymentScreenshot);
     response = await api.post('/registrations', formData, {
@@ -184,6 +184,26 @@ const getCertificateById = async (id) => {
   return response.data;
 };
 
+/**
+ * Approve a registration request.
+ * @param {string} registrationId - Registration ID.
+ * @returns {Promise<object>} Updated registration.
+ */
+const approveRegistration = async (registrationId) => {
+  const response = await api.patch(`/registrations/${registrationId}/approve`);
+  return response.data;
+};
+
+/**
+ * Reject a registration request.
+ * @param {string} registrationId - Registration ID.
+ * @returns {Promise<object>} Updated registration.
+ */
+const rejectRegistration = async (registrationId) => {
+  const response = await api.patch(`/registrations/${registrationId}/reject`);
+  return response.data;
+};
+
 const registrationService = {
   registerForEvent,
   updatePaymentStatus,
@@ -201,6 +221,8 @@ const registrationService = {
   getMyCertificates,
   generateCertificate,
   getCertificateById,
+  approveRegistration,
+  rejectRegistration,
   markAttendanceBulk,
 
 };

@@ -71,11 +71,12 @@ const getApprovedEvents = async (req, res) => {
  */
 const getUpcomingEvents = async (req, res) => {
   const limit = Math.max(1, parseInt(req.query.limit, 10) || 3);
-  const now = new Date();
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
 
   const events = await Event.find({
     status: { $in: ['approved', 'hod_approved'] },
-    date: { $gte: now },
+    date: { $gte: today },
   })
     .sort({ date: 1 })
     .limit(limit)

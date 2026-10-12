@@ -5,6 +5,8 @@ const {
   getStudentRegistrations,
   getEventParticipants,
   updatePaymentStatus,
+  approveRegistration,
+  rejectRegistration,
 } = require('../controllers/registrationController');
 const { protect } = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
@@ -20,5 +22,9 @@ router.get('/my', roleMiddleware('student'), getStudentRegistrations);
 
 // Teacher/HOD event rosters view
 router.get('/:eventId/list', roleMiddleware('teacher', 'hod'), getEventParticipants);
+
+// Registration approval/rejection
+router.patch('/:registrationId/approve', roleMiddleware('teacher', 'hod'), approveRegistration);
+router.patch('/:registrationId/reject', roleMiddleware('teacher', 'hod'), rejectRegistration);
 
 module.exports = router;

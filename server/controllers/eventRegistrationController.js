@@ -1,4 +1,5 @@
 const Registration = require('../models/Registration');
+const Event = require('../models/Event');
 
 /**
  * Return registrations for an event along with total count.

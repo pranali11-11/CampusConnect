@@ -34,12 +34,12 @@ const registrationSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['registered', 'attended', 'cancelled'],
-    default: 'registered',
+    enum: ['pending_approval', 'registered', 'attended', 'cancelled', 'rejected'],
+    default: 'pending_approval',
   },
   paymentStatus: {
     type: String,
-    enum: ['free', 'pending', 'paid', 'rejected'],
+    enum: ['free', 'pending', 'verified', 'flagged', 'paid', 'rejected'],
     default: 'free',
   },
   paymentAmount: {
@@ -50,6 +50,16 @@ const registrationSchema = new mongoose.Schema({
     type: String,
     default: '',
     trim: true,
+    validate: {
+      validator: function(v) {
+        // If provided, must be exactly 12 digits
+        if (v && v !== '') {
+          return /^\d{12}$/.test(v);
+        }
+        return true;
+      },
+      message: 'UTR must be exactly 12 digits'
+    }
   },
   paymentScreenshot: {
     type: String,
