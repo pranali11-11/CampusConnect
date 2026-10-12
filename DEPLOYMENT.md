@@ -47,7 +47,7 @@ Set these environment variables in Render. `PORT` is assigned by Render and is r
 | `CLOUDINARY_API_KEY`    | Optional | Cloudinary API key, if using Cloudinary uploads                                        |
 | `CLOUDINARY_API_SECRET` | Optional | Cloudinary API secret, if using Cloudinary uploads                                     |
 
-The server has a local-disk upload fallback, but Render's local filesystem is not persistent across deploys/restarts. Configure Cloudinary for durable production uploads. HOD accounts cannot be created through public registration; provision those accounts through a controlled administrator process.
+The server has a local-disk upload fallback, but Render's local filesystem is not persistent across deploys/restarts. Configure Cloudinary for durable production uploads. HOD accounts cannot be created through public registration. An administrator can provision one from a trusted machine with access to the target database: configure `server/.env` with that database's `MONGO_URI`, then run `npm run create-hod` from the `server` directory. The command prompts for the HOD details, hides the password while typing, and hashes it through the User model. Never share or commit the password or database URI.
 
 Login, registration, and contact rate limits currently use per-instance memory. They are suitable for the single-instance deployment baseline; configure a shared rate-limit store before scaling the API to multiple instances.
 
