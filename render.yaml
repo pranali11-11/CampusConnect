@@ -18,4 +18,4 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: FRONTEND_ORIGIN
-        sync: false
+        value: https://campus-connect-mauve-beta.vercel.app

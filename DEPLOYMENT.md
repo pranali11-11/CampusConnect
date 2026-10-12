@@ -36,34 +36,34 @@ Create a Node web service connected to the GitHub repository, or use the include
 
 Set these environment variables in Render. `PORT` is assigned by Render and is read by the server automatically.
 
-| Variable                | Required | Value                                                                                 |
-| ----------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `NODE_ENV`              | Yes      | `production`                                                                          |
-| `MONGO_URI`             | Yes      | Rotated Atlas connection string                                                       |
-| `JWT_SECRET`            | Yes      | Random secret with at least 32 characters; generate outside Git                       |
-| `JWT_EXPIRES_IN`        | No       | Token lifetime such as `7d`; defaults to `7d`                                         |
-| `FRONTEND_ORIGIN`       | Yes      | Exact Netlify origin, e.g. `https://your-site.netlify.app`; no path or trailing slash |
-| `CLOUDINARY_CLOUD_NAME` | Optional | Cloudinary account value, if using Cloudinary uploads                                 |
-| `CLOUDINARY_API_KEY`    | Optional | Cloudinary API key, if using Cloudinary uploads                                       |
-| `CLOUDINARY_API_SECRET` | Optional | Cloudinary API secret, if using Cloudinary uploads                                    |
+| Variable                | Required | Value                                                                                  |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `NODE_ENV`              | Yes      | `production`                                                                           |
+| `MONGO_URI`             | Yes      | Rotated Atlas connection string                                                        |
+| `JWT_SECRET`            | Yes      | Random secret with at least 32 characters; generate outside Git                        |
+| `JWT_EXPIRES_IN`        | No       | Token lifetime such as `7d`; defaults to `7d`                                          |
+| `FRONTEND_ORIGIN`       | Yes      | `https://campus-connect-mauve-beta.vercel.app`; origin only, no path or trailing slash |
+| `CLOUDINARY_CLOUD_NAME` | Optional | Cloudinary account value, if using Cloudinary uploads                                  |
+| `CLOUDINARY_API_KEY`    | Optional | Cloudinary API key, if using Cloudinary uploads                                        |
+| `CLOUDINARY_API_SECRET` | Optional | Cloudinary API secret, if using Cloudinary uploads                                     |
 
 The server has a local-disk upload fallback, but Render's local filesystem is not persistent across deploys/restarts. Configure Cloudinary for durable production uploads. HOD accounts cannot be created through public registration; provision those accounts through a controlled administrator process.
 
 Login, registration, and contact rate limits currently use per-instance memory. They are suitable for the single-instance deployment baseline; configure a shared rate-limit store before scaling the API to multiple instances.
 
-## Netlify Frontend
+## Frontend Hosting
 
-Connect the same GitHub repository to Netlify. The included `netlify.toml` sets the base directory, build command, output directory, Node version, and SPA fallback for React Router.
+The active frontend is hosted on Vercel at `https://campus-connect-mauve-beta.vercel.app`. In Vercel project settings, set the root directory to `client`, framework preset to Vite, build command to `npm run build`, and output directory to `dist`. If deploying this repository to Netlify instead, `netlify.toml` already configures its base directory, build command, output directory, Node version, and SPA fallback.
 
-Set this site environment variable in Netlify:
+Set this environment variable in Vercel for Production (and Preview too if previews should use this backend):
 
-| Variable       | Value                                            |
-| -------------- | ------------------------------------------------ |
-| `VITE_API_URL` | `https://<your-render-service>.onrender.com/api` |
+| Variable       | Value                                         |
+| -------------- | --------------------------------------------- |
+| `VITE_API_URL` | `https://campusconnect-6aat.onrender.com/api` |
 
-Trigger a new deploy after setting it. Vite variables are bundled into public browser code: only put the API base URL here. Never put MongoDB credentials, JWT secrets, Cloudinary secrets, or other server credentials in `VITE_*` variables.
+Trigger a new Vercel deployment after setting it. The `/api` suffix is required because Express mounts application routes under `/api`; without it, requests go to nonexistent paths such as `/auth/login`. Vite variables are bundled into public browser code: only put the API base URL here. Never put MongoDB credentials, JWT secrets, Cloudinary secrets, or other server credentials in `VITE_*` variables.
 
-After Netlify provides the production site origin, set the exact origin as Render's `FRONTEND_ORIGIN` and redeploy the API. Production CORS allows only that configured origin; localhost origins are enabled only outside production.
+The Render Blueprint now sets the exact production Vercel origin. Apply/sync the Blueprint and redeploy the API so CORS allows it. Production CORS allows only that configured origin; localhost origins are enabled only outside production. If switching to Netlify, update `FRONTEND_ORIGIN` to the Netlify origin as well.
 
 ## Local Environment
 
