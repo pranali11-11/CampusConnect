@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const cleanApiUrl = rawApiUrl.replace(/\/+$/, '');
+const API_URL = cleanApiUrl.endsWith('/api') ? cleanApiUrl : `${cleanApiUrl}/api`;
 
 import axios from 'axios';
 
@@ -44,10 +46,7 @@ api.interceptors.response.use(
       error?.code === 'ERR_CONNECTION_REFUSED' ||
       error?.message === 'Network Error';
 
-    if (isBackendUnavailable) {
-      localStorage.removeItem('token');
-      // Don't hard-redirect here (it may break flows like signup). Let pages show UI.
-    }
+    // We do not wipe the token here so cold-starts or transient timeouts don't abruptly log the user out.
 
     if (error.response && error.response.status === 401) {
       // Clear expired credentials
