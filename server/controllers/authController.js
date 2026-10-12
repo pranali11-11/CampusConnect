@@ -11,7 +11,7 @@ const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, role: user.role, name: user.name },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
 
@@ -20,28 +20,40 @@ const generateToken = (user) => {
  * POST /api/auth/register
  */
 const registerUser = async (req, res) => {
-  const { name, email, password, role, department, rollNumber, mobile } = req.body;
+  const { name, email, password, role, department, rollNumber, mobile } = req.body || {};
 
-  if (!name || !email || !password || !role || !department) {
+  if (![name, email, password, role, department, mobile].every((value) => typeof value === 'string')) {
     return res.status(400).json({
       success: false,
-      error: 'Name, email, password, role, and department are required',
+      error: 'Invalid registration details',
+    });
+  }
+
+  if (!['student', 'teacher'].includes(role)) {
+    return res.status(400).json({
+      success: false,
+      error: 'This role cannot be assigned through public registration',
+    });
+  }
+
+  if (
+    name.trim().length < 3 || name.trim().length > 100 ||
+    email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+    password.length < 8 || password.length > 128 ||
+    department.trim().length < 1 || department.trim().length > 100 ||
+    !/^\d{10}$/.test(mobile.trim())
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: 'Registration details are invalid or outside the allowed length',
     });
   }
 
   // Validate rollNumber for students
-  if (role === 'student' && !rollNumber?.trim()) {
+  if (role === 'student' && (typeof rollNumber !== 'string' || !rollNumber.trim() || rollNumber.trim().length > 50)) {
     return res.status(400).json({
       success: false,
       error: 'Roll number is required for students',
-    });
-  }
-
-  // Validate mobile number
-  if (!mobile?.trim()) {
-    return res.status(400).json({
-      success: false,
-      error: 'Mobile number is required',
     });
   }
 
@@ -77,9 +89,9 @@ const registerUser = async (req, res) => {
  * POST /api/auth/login
  */
 const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
 
-  if (!email || !password) {
+  if (typeof email !== 'string' || typeof password !== 'string' || email.length > 254 || password.length > 128) {
     return res.status(400).json({
       success: false,
       error: 'Please provide email and password',
@@ -89,16 +101,16 @@ const loginUser = async (req, res) => {
   const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
 
   if (!user) {
-    return res.status(404).json({
+    return res.status(401).json({
       success: false,
-      error: 'User not found',
+      error: 'Invalid email or password',
     });
   }
 
   if (user.status === 'inactive') {
-    return res.status(403).json({
+    return res.status(401).json({
       success: false,
-      error: 'Your account is deactivated. Please contact support.',
+      error: 'Invalid email or password',
     });
   }
 
@@ -106,7 +118,7 @@ const loginUser = async (req, res) => {
   if (!isMatch) {
     return res.status(401).json({
       success: false,
-      error: 'Invalid password',
+      error: 'Invalid email or password',
     });
   }
 

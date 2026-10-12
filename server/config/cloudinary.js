@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // Ensure uploads directory exists for local storage fallback
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -35,13 +34,34 @@ if (isCloudinaryConfigured()) {
 let multerStorage;
 
 if (isCloudinaryConfigured()) {
-  multerStorage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-      folder: 'campusconnect_banners',
-      allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'avif'],
+  multerStorage = {
+    _handleFile(req, file, callback) {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'campusconnect_banners',
+          allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'avif'],
+          resource_type: 'image',
+        },
+        (error, result) => {
+          if (error) return callback(error);
+          callback(null, {
+            path: result.secure_url,
+            secure_url: result.secure_url,
+            filename: result.public_id,
+            public_id: result.public_id,
+            size: result.bytes,
+            format: result.format,
+          });
+        }
+      );
+      file.stream.pipe(uploadStream);
     },
-  });
+
+    _removeFile(req, file, callback) {
+      if (!file.public_id) return callback(null);
+      cloudinary.uploader.destroy(file.public_id).then(() => callback(null), callback);
+    },
+  };
 } else {
   multerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -55,7 +75,21 @@ if (isCloudinaryConfigured()) {
   });
 }
 
-const uploadBanner = multer({ storage: multerStorage });
+const uploadBanner = multer({
+  storage: multerStorage,
+  fileFilter: (req, file, callback) => {
+    if (!/^image\/(jpeg|png|webp|avif)$/.test(file.mimetype)) {
+      return callback(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+    }
+    callback(null, true);
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 5,
+    fields: 50,
+    parts: 55,
+  },
+});
 
 // Middleware to normalize req.file.path for local uploads
 const normalizeFilePath = (req, res, next) => {

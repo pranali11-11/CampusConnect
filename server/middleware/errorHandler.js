@@ -2,18 +2,31 @@
  * Global Express error handling middleware.
  */
 const errorHandler = (err, req, res, next) => {
-  let error = { ...err };
-  error.message = err.message;
+  const statusCode = err.statusCode || err.status ||
+    (err.type === 'entity.too.large' ? 413 : res.statusCode !== 200 ? res.statusCode : 500);
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Request failed:', { name: err.name || 'Error', statusCode });
+  } else {
+    console.error('Unhandled Server Error:', err);
+  }
 
-  // Log full error trace for development debugging
-  console.error('Unhandled Server Error:', err);
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ success: false, error: 'Request body is too large' });
+  }
+
+  if (err.name === 'MulterError') {
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    return res.status(status).json({
+      success: false,
+      error: status === 413 ? 'Uploaded file is too large' : 'Invalid file upload',
+    });
+  }
 
   // Handle Mongoose CastError (e.g. invalid ObjectId format)
   if (err.name === 'CastError') {
-    const message = `Invalid resource identifier format: ${err.value}`;
     return res.status(404).json({
       success: false,
-      error: message,
+      error: 'Invalid resource identifier format',
     });
   }
 
@@ -38,10 +51,13 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Send generic or custom status code errors
-  res.status(err.statusCode || 500).json({
+  const message = statusCode >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal Server Error'
+    : err.message || 'Internal Server Error';
+
+  res.status(statusCode).json({
     success: false,
-    error: error.message || 'Internal Server Error',
+    error: message,
   });
 };
 

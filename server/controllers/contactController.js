@@ -6,18 +6,25 @@ const ContactMessage = require('../models/ContactMessage');
  * Access: Public
  */
 const submitContactMessage = async (req, res) => {
-  const { name, email, subject, message } = req.body;
+  const { name, email, subject, message } = req.body || {};
 
-  if (!name || !email || !subject || !message) {
-    res.status(400);
-    throw new Error('Please fill in all contact message fields');
+  if (
+    [name, email, subject, message].some((value) => typeof value !== 'string' || !value.trim()) ||
+    name.trim().length > 100 || email.trim().length > 254 ||
+    subject.trim().length > 200 || message.trim().length > 5000 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide valid contact message details',
+    });
   }
 
   const contactMessage = await ContactMessage.create({
-    name,
-    email,
-    subject,
-    message,
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    subject: subject.trim(),
+    message: message.trim(),
   });
 
   res.status(201).json({

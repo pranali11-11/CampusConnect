@@ -2,7 +2,11 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const uri = process.env.MONGO_URI || '';
+    const uri = process.env.MONGO_URI;
+    if (!uri) {
+      throw new Error('MONGO_URI is required');
+    }
+
     // Only enable TLS for Atlas SRV URIs (mongodb+srv://)
     const useTLS = uri.startsWith('mongodb+srv');
 
@@ -13,7 +17,7 @@ const connectDB = async () => {
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
+    console.error(`MongoDB connection failed (${error.name || 'Error'}). Check MONGO_URI and Atlas network access.`);
     process.exit(1);
   }
 };

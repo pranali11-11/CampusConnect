@@ -8,13 +8,10 @@ const protect = async (req, res, next) => {
   let token;
 
   // Check for token in Authorization header
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
+  if (req.headers.authorization && /^Bearer\s+/i.test(req.headers.authorization)) {
     try {
       // Extract the token
-      token = req.headers.authorization.split(' ')[1];
+      token = req.headers.authorization.split(/\s+/)[1];
 
       // Verify the token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -45,7 +42,6 @@ const protect = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.error('JWT Verification Error:', error.message);
       return res.status(401).json({
         success: false,
         message: 'Not authorized, token validation failed',

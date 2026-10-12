@@ -119,7 +119,7 @@ const createEvent = async (req, res) => {
     throw new Error('Please fill in all required event details');
   }
 
-  // Set registrationBannerUrl using req.files from multer-storage-cloudinary or fallback from body
+  // Set registrationBannerUrl using uploaded files or the provided fallback URL
   const finalBannerUrl = req.files?.registrationBanner?.[0]?.path || (registrationBannerUrl || bannerUrl || "");
   const finalCertificateTemplate = req.files?.certificateTemplate?.[0]?.path || (req.body.certificateTemplate || "");
 
