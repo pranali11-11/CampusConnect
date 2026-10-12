@@ -34,10 +34,15 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 
 // Middleware
-const frontendOrigin = process.env.FRONTEND_ORIGIN || process.env.CLIENT_URL;
-const allowedOrigins = new Set([frontendOrigin].filter(Boolean));
+const rawFrontendOrigins = (process.env.FRONTEND_ORIGIN || process.env.CLIENT_URL || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const allowedOrigins = new Set(rawFrontendOrigins);
+
 if (process.env.NODE_ENV !== 'production') {
-  ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173']
+  ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173', 'http://localhost:3000', 'http://127.0.0.1:3000']
     .forEach((origin) => allowedOrigins.add(origin));
 }
 
@@ -48,7 +53,20 @@ if (process.env.NODE_ENV === 'production') {
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
   origin(origin, callback) {
-    callback(null, !origin || allowedOrigins.has(origin));
+    if (!origin) return callback(null, true);
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+
+    // Allow explicitly configured origins
+    if (allowedOrigins.has(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    // Allow Vercel production and preview domains (*.vercel.app)
+    if (/^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    callback(null, false);
   },
   credentials: true,
 }));
@@ -118,7 +136,7 @@ if (process.env.NODE_ENV !== 'test') {
     if (!jwtSecret || jwtSecret.length < 32) {
       throw new Error('JWT_SECRET must contain at least 32 characters');
     }
-    if (process.env.NODE_ENV === 'production' && !frontendOrigin) {
+    if (process.env.NODE_ENV === 'production' && allowedOrigins.size === 0) {
       throw new Error('FRONTEND_ORIGIN is required in production');
     }
 
