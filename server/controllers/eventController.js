@@ -56,6 +56,10 @@ const getApprovedEvents = async (req, res) => {
     filter.status = { $in: ['approved', 'hod_approved'] };
   }
 
+  if (req.query.department && req.query.department !== 'all') {
+    filter.department = req.query.department;
+  }
+
   const events = await Event.find(filter).populate('createdBy coordinatorId', 'name email mobile department');
 
   res.status(200).json({
@@ -74,10 +78,16 @@ const getUpcomingEvents = async (req, res) => {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  const events = await Event.find({
+  const filter = {
     status: { $in: ['approved', 'hod_approved'] },
     date: { $gte: today },
-  })
+  };
+
+  if (req.query.department && req.query.department !== 'all') {
+    filter.department = req.query.department;
+  }
+
+  const events = await Event.find(filter)
     .sort({ date: 1 })
     .limit(limit)
     .populate('createdBy coordinatorId', 'name email mobile department');
@@ -98,6 +108,7 @@ const createEvent = async (req, res) => {
   const {
     title,
     category,
+    department: inputDepartment,
     description,
     venue,
     date,
@@ -113,10 +124,12 @@ const createEvent = async (req, res) => {
     maxTeamSize,
   } = req.body;
 
+  const department = (inputDepartment || req.user.department || '').trim();
+
   // Verify inputs are not empty
-  if (!title || !category || !description || !venue || !date || !time || !maxParticipants || !registrationDeadline) {
+  if (!title || !category || !description || !venue || !date || !time || !maxParticipants || !registrationDeadline || !department) {
     res.status(400);
-    throw new Error('Please fill in all required event details');
+    throw new Error('Please fill in all required event details including department');
   }
 
   // Set registrationBannerUrl using uploaded files or the provided fallback URL
@@ -131,6 +144,7 @@ const createEvent = async (req, res) => {
   const event = await Event.create({
     title,
     category,
+    department,
     description,
     venue,
     date,
@@ -156,17 +170,17 @@ const createEvent = async (req, res) => {
     data: event,
   });
 
-  // Notify all HOD users about the new event
+  // Notify ONLY the HOD(s) of the department to which the event belongs
   try {
-    const hods = await User.find({ role: 'hod' });
+    const hods = await User.find({ role: 'hod', department });
     const notifications = hods.map((hod) => ({
       userId: hod._id,
-      message: `New event "${event.title}" created by ${req.user.name}. Please review.`,
+      message: `New event "${event.title}" from ${department} department requires your review and approval.`,
       type: 'event_reminder',
     }));
     if (notifications.length) await Notification.insertMany(notifications);
   } catch (err) {
-    console.error('Failed to notify HODs:', err.message);
+    console.error(`Failed to notify HODs of ${department}:`, err.message);
   }
 };
 
@@ -304,15 +318,20 @@ const deleteEvent = async (req, res) => {
  * Access: Private (HOD only)
  */
 const approveEventByHOD = async (req, res) => {
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findById(req.params.id).populate('createdBy', 'name email department');
 
   if (!event) {
     res.status(404);
     throw new Error('Event not found');
   }
 
-  event.status = 'hod_approved'; // HOD approval should move event into hod_approved bucket
+  const eventDept = event.department || event.createdBy?.department;
+  if (req.user.role === 'hod' && eventDept && eventDept !== req.user.department) {
+    res.status(403);
+    throw new Error(`Forbidden: You can only approve events from your own department (${req.user.department})`);
+  }
 
+  event.status = 'hod_approved'; // HOD approval should move event into hod_approved bucket
   event.approvedByHOD = req.user.id;
   event.rejectionReason = ''; // Clear rejection reason if previously set
 
@@ -320,7 +339,7 @@ const approveEventByHOD = async (req, res) => {
 
   // Trigger Notification to event creator (Teacher)
   await Notification.create({
-    userId: event.createdBy,
+    userId: event.createdBy?._id || event.createdBy,
     message: `Your event "${event.title}" has been approved by HOD ${req.user.name}.`,
     type: 'event_approved',
   });
@@ -345,11 +364,17 @@ const rejectEventByHOD = async (req, res) => {
     throw new Error('Please provide a rejection reason');
   }
 
-  const event = await Event.findById(req.params.id);
+  const event = await Event.findById(req.params.id).populate('createdBy', 'name email department');
 
   if (!event) {
     res.status(404);
     throw new Error('Event not found');
+  }
+
+  const eventDept = event.department || event.createdBy?.department;
+  if (req.user.role === 'hod' && eventDept && eventDept !== req.user.department) {
+    res.status(403);
+    throw new Error(`Forbidden: You can only reject events from your own department (${req.user.department})`);
   }
 
   event.status = 'rejected';
@@ -360,7 +385,7 @@ const rejectEventByHOD = async (req, res) => {
 
   // Trigger Notification to event creator (Teacher)
   await Notification.create({
-    userId: event.createdBy,
+    userId: event.createdBy?._id || event.createdBy,
     message: `Your event "${event.title}" has been rejected. Reason: ${rejectionReason}`,
     type: 'event_approved', // Using event_approved type as system message category for HOD decisions
   });
@@ -395,16 +420,110 @@ const getTeacherEvents = async (req, res) => {
  * Access: Private (HOD only)
  */
 const getPendingEvents = async (req, res) => {
-  const events = await Event.find({ status: 'pending' })
+  const hodDept = req.user.department;
 
-    .populate('createdBy', 'name email department')
+  const query = { status: 'pending' };
+  if (hodDept) {
+    query.$or = [
+      { department: hodDept },
+      { department: { $in: [null, ''] } },
+      { department: { $exists: false } },
+    ];
+  }
+
+  const events = await Event.find(query)
+    .populate('createdBy', 'name email department mobile')
     .populate('coordinatorId', 'name email mobile department')
     .sort({ createdAt: -1 });
 
+  // Ensure strict department match for HOD
+  const filteredEvents = hodDept
+    ? events.filter((ev) => {
+        if (ev.department) return ev.department === hodDept;
+        return ev.createdBy?.department === hodDept;
+      })
+    : events;
+
   res.status(200).json({
     success: true,
-    count: events.length,
-    data: events,
+    count: filteredEvents.length,
+    data: filteredEvents,
+  });
+};
+
+const COLLEGE_DEPARTMENTS = [
+  'Computer Science',
+  'Information Technology',
+  'Electronics & Communication',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Electrical Engineering',
+  'Biotechnology',
+  'Mathematics',
+  'Physics',
+  'Chemistry',
+];
+
+/**
+ * Get all departments and their respective events
+ * GET /api/events/department-wise
+ */
+const getDepartmentWiseEvents = async (req, res) => {
+  const filter = {};
+
+  if (req.query.status && req.query.status !== 'all') {
+    if (req.query.status === 'approved') {
+      filter.status = { $in: ['approved', 'hod_approved'] };
+    } else {
+      filter.status = req.query.status;
+    }
+  } else if (!req.user || req.user.role === 'student') {
+    filter.status = { $in: ['approved', 'hod_approved'] };
+  }
+
+  if (req.query.department && req.query.department !== 'all') {
+    filter.department = req.query.department;
+  }
+
+  const events = await Event.find(filter)
+    .populate('createdBy', 'name email department mobile')
+    .populate('coordinatorId', 'name email mobile department')
+    .sort({ date: 1, createdAt: -1 });
+
+  const departmentMap = {};
+  COLLEGE_DEPARTMENTS.forEach((dept) => {
+    departmentMap[dept] = [];
+  });
+
+  events.forEach((event) => {
+    const dept = event.department || event.createdBy?.department || 'Computer Science';
+    if (!departmentMap[dept]) {
+      departmentMap[dept] = [];
+    }
+    departmentMap[dept].push(event);
+  });
+
+  const departmentData = Object.keys(departmentMap).map((dept) => {
+    const deptEvents = departmentMap[dept];
+    const approvedCount = deptEvents.filter((e) => ['approved', 'hod_approved'].includes(e.status)).length;
+    const pendingCount = deptEvents.filter((e) => e.status === 'pending').length;
+    const rejectedCount = deptEvents.filter((e) => e.status === 'rejected').length;
+
+    return {
+      department: dept,
+      totalCount: deptEvents.length,
+      approvedCount,
+      pendingCount,
+      rejectedCount,
+      events: deptEvents,
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    totalEvents: events.length,
+    departmentsCount: departmentData.length,
+    data: departmentData,
   });
 };
 
@@ -432,6 +551,7 @@ const getHODDashboardStats = async (req, res) => {
     totalStudents,
     totalTeachers,
     topDepartments,
+    eventsByDepartmentRaw,
   ] = await Promise.all([
     Event.countDocuments(),
     Event.countDocuments({ status: 'pending' }),
@@ -475,6 +595,11 @@ const getHODDashboardStats = async (req, res) => {
       { $limit: 5 },
       { $project: { _id: 0, department: '$_id', count: 1 } },
     ]),
+    Event.aggregate([
+      { $group: { _id: { $ifNull: ['$department', 'Computer Science'] }, count: { $sum: 1 } } },
+      { $project: { _id: 0, department: '$_id', count: 1 } },
+      { $sort: { count: -1 } },
+    ]),
   ]);
 
   const monthlyRegistrations = monthlyRegistrationsRaw.map(({ _id, count }) => ({
@@ -503,6 +628,7 @@ const getHODDashboardStats = async (req, res) => {
       eventsByCategory,
       monthlyRegistrations,
       topDepartments,
+      eventsByDepartment: eventsByDepartmentRaw,
     },
   });
 };
@@ -518,5 +644,6 @@ module.exports = {
   rejectEventByHOD,
   getTeacherEvents,
   getPendingEvents,
+  getDepartmentWiseEvents,
   getHODDashboardStats,
 };

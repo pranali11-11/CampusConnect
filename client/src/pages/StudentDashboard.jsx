@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/common/Sidebar';
 import Loader from '../components/common/Loader';
 import registrationService from '../services/registrationService';
+import eventService from '../services/eventService';
 import { formatDate } from '../utils/formatDate';
+import { formatDescription } from '../utils/formatDescription';
+import { resolveImageUrl } from '../utils/imageUrl';
+import { DEPARTMENTS, DEPARTMENT_ICONS } from '../constants/departments';
 import { useToast } from '../hooks/useToast';
 import useAuth from '../hooks/useAuth';
 
@@ -19,25 +23,31 @@ const StudentDashboard = () => {
   const [registrations, setRegistrations] = useState([]);
   const [certificates, setCertificates] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [departmentWiseData, setDepartmentWiseData] = useState([]);
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState('all');
+  const [deptSearchQuery, setDeptSearchQuery] = useState('');
 
   // Modal states
   const [selectedQR, setSelectedQR] = useState(null);
   const [selectedCert, setSelectedCert] = useState(null);
+  const [viewingEvent, setViewingEvent] = useState(null);
 
   // Fetch all student dashboard datasets
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
         setLoading(true);
-        const [regRes, certRes, notifRes] = await Promise.all([
+        const [regRes, certRes, notifRes, deptRes] = await Promise.all([
           registrationService.getStudentRegistrations(),
           registrationService.getMyCertificates(),
           registrationService.getMyNotifications(),
+          eventService.getDepartmentWiseEvents({ status: 'approved' }).catch(() => ({ success: false })),
         ]);
 
         if (regRes.success) setRegistrations(regRes.data);
         if (certRes.success) setCertificates(certRes.data);
         if (notifRes.success) setNotifications(notifRes.data);
+        if (deptRes?.success) setDepartmentWiseData(deptRes.data);
       } catch (error) {
         console.error('Error fetching student dashboard details:', error);
         showToast('Failed to load dashboard data.', 'error');
@@ -92,10 +102,36 @@ const StudentDashboard = () => {
 
   const tabs = [
     { id: 'registrations', label: 'Registered Events', icon: '🎟️' },
+    { id: 'explore', label: 'Department Events', icon: '🏢' },
     { id: 'certificates', label: 'Certificates', icon: '🎓' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
     { id: 'profile', label: 'My Profile', icon: '👤' },
   ];
+
+  const filteredDeptData = useMemo(() => {
+    return departmentWiseData
+      .filter((deptItem) => {
+        if (selectedDeptFilter === 'all') return true;
+        return deptItem.department === selectedDeptFilter;
+      })
+      .map((deptItem) => {
+        let events = deptItem.events || [];
+        if (deptSearchQuery.trim()) {
+          const q = deptSearchQuery.toLowerCase().trim();
+          events = events.filter(
+            (e) =>
+              e.title?.toLowerCase().includes(q) ||
+              e.venue?.toLowerCase().includes(q) ||
+              e.category?.toLowerCase().includes(q) ||
+              e.description?.toLowerCase().includes(q)
+          );
+        }
+        return {
+          ...deptItem,
+          filteredEvents: events,
+        };
+      });
+  }, [departmentWiseData, selectedDeptFilter, deptSearchQuery]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const attendedCount = registrations.filter((r) => r.status === 'attended').length;
@@ -304,6 +340,184 @@ const StudentDashboard = () => {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ──────────────── TAB: DEPARTMENT EVENTS ──────────────── */}
+          {activeTab === 'explore' && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🏢</span>
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                      Campus Department Events
+                    </h2>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Explore approved seminars, workshops, and competitions hosted by all college academic departments.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-primary text-xs font-extrabold border border-blue-100">
+                    {DEPARTMENTS.length} Academic Departments
+                  </span>
+                </div>
+              </div>
+
+              {/* Search & Department Filters */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    value={deptSearchQuery}
+                    onChange={(e) => setDeptSearchQuery(e.target.value)}
+                    placeholder="Search events by title, venue, or description..."
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                  />
+                  {deptSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setDeptSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                  <button
+                    onClick={() => setSelectedDeptFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1.5 ${
+                      selectedDeptFilter === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <span>🏢</span>
+                    <span>All Departments</span>
+                  </button>
+                  {DEPARTMENTS.map((dept) => {
+                    const dItem = departmentWiseData.find((d) => d.department === dept);
+                    const count = dItem ? dItem.approvedCount : 0;
+                    return (
+                      <button
+                        key={dept}
+                        onClick={() => setSelectedDeptFilter(dept)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1.5 ${
+                          selectedDeptFilter === dept
+                            ? 'bg-primary text-white'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <span>{DEPARTMENT_ICONS[dept] || '🏢'}</span>
+                        <span>{dept}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                          selectedDeptFilter === dept ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Department Event Listings */}
+              <div className="space-y-6">
+                {filteredDeptData.map((dItem) => {
+                  const events = dItem.filteredEvents || [];
+                  return (
+                    <div
+                      key={dItem.department}
+                      className="border border-slate-200/80 rounded-2xl p-5 bg-white shadow-sm"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-2xl">{DEPARTMENT_ICONS[dItem.department] || '🏢'}</span>
+                          <div>
+                            <h3 className="font-extrabold text-slate-900 text-base">
+                              {dItem.department}
+                            </h3>
+                            <span className="text-[11px] text-slate-400 font-semibold">
+                              {events.length} {events.length === 1 ? 'Approved Event' : 'Approved Events'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {events.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-4 text-center">
+                          No events currently listed for this department.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {events.map((ev) => {
+                            const bannerUrl = resolveImageUrl(ev.registrationBannerUrl || ev.bannerUrl);
+                            return (
+                              <div
+                                key={ev._id}
+                                className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white hover:shadow-md transition flex flex-col justify-between gap-3"
+                              >
+                                <div>
+                                  {bannerUrl && (
+                                    <div className="h-32 rounded-lg overflow-hidden bg-slate-100 mb-2.5">
+                                      <img
+                                        src={bannerUrl}
+                                        alt={ev.title}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary px-2 py-0.5 rounded-md">
+                                      {ev.category}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                                      {ev.registrationFee > 0 ? `₹${ev.registrationFee}` : 'Free'}
+                                    </span>
+                                  </div>
+                                  <h4 className="font-bold text-slate-900 text-sm leading-snug">
+                                    {ev.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 leading-relaxed">
+                                    {formatDescription(ev.description)}
+                                  </p>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-2.5 pt-2 border-t border-slate-200/60">
+                                    <span>📍 {ev.venue}</span>
+                                    <span>📅 {formatDate(ev.date)}</span>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
+                                  <button
+                                    onClick={() => setViewingEvent(ev)}
+                                    className="text-xs font-bold text-primary hover:underline"
+                                  >
+                                    View Full Details
+                                  </button>
+                                  <button
+                                    onClick={() => navigate(`/events/${ev._id}`)}
+                                    className="bg-primary hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                                  >
+                                    Register Now →
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -660,6 +874,104 @@ const StudentDashboard = () => {
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────── MODAL: EVENT DETAILS ──────────────── */}
+      {viewingEvent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-100 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">
+                    🏢 {viewingEvent.department || 'Department Event'}
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
+                    {viewingEvent.category}
+                  </span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug">
+                  {viewingEvent.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingEvent(null)}
+                className="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-1 space-y-4 my-4">
+              {resolveImageUrl(viewingEvent.registrationBannerUrl || viewingEvent.bannerUrl) && (
+                <div className="rounded-xl overflow-hidden bg-slate-100 max-h-56 flex items-center justify-center">
+                  <img
+                    src={resolveImageUrl(viewingEvent.registrationBannerUrl || viewingEvent.bannerUrl)}
+                    alt={viewingEvent.title}
+                    className="w-full h-full object-contain max-h-56"
+                  />
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                  Complete Description
+                </h4>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed whitespace-pre-line break-words">
+                  {formatDescription(viewingEvent.description)}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">📍 Venue</span>
+                  <span className="font-bold text-slate-900">{viewingEvent.venue}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">📅 Date & Time</span>
+                  <span className="font-bold text-slate-900">{formatDate(viewingEvent.date)} at {viewingEvent.time}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">💰 Fee</span>
+                  <span className="font-bold text-slate-900">{viewingEvent.registrationFee > 0 ? `₹${viewingEvent.registrationFee}` : 'Free'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">👥 Capacity</span>
+                  <span className="font-bold text-slate-900">{viewingEvent.maxParticipants} max</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">⏳ Registration Closes</span>
+                  <span className="font-bold text-slate-900">{formatDate(viewingEvent.registrationDeadline)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] font-semibold block uppercase">🏷️ Format</span>
+                  <span className="font-bold text-slate-900 capitalize">{viewingEvent.registrationType || 'Individual'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setViewingEvent(null)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingEvent(null);
+                  navigate(`/events/${viewingEvent._id}`);
+                }}
+                className="bg-primary hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded-xl transition shadow-sm"
+              >
+                Proceed to Register →
               </button>
             </div>
           </div>

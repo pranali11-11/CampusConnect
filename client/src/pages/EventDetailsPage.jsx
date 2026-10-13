@@ -285,10 +285,15 @@ const EventDetailsPage = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
           <div className="absolute bottom-6 left-6 right-6 text-white flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <span className="px-3.5 py-1 bg-blue-600/90 text-white rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
                   {event.category || "Event"}
                 </span>
+                {(event.department || event.createdBy?.department) && (
+                  <span className="px-3.5 py-1 bg-indigo-600/90 text-white rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                    🏢 {event.department || event.createdBy?.department}
+                  </span>
+                )}
                 {isDeadlinePassed && (
                   <span className="px-3.5 py-1 bg-rose-600/90 text-white rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
                     Registration Closed

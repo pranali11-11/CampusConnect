@@ -441,6 +441,11 @@ const LandingPage = () => {
                       <span className="bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm backdrop-blur-md">
                         {event.category}
                       </span>
+                      {event.department && (
+                        <span className="bg-white/95 dark:bg-slate-900/90 text-primary dark:text-blue-400 text-xs font-bold px-3 py-1 rounded-full shadow-sm backdrop-blur-md">
+                          🏢 {event.department}
+                        </span>
+                      )}
                     </div>
                     <span
                       className={`absolute top-3 right-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-md ${statusClass}`}

@@ -5,10 +5,13 @@ import eventService from "../services/eventService";
 import registrationService from "../services/registrationService";
 import { formatDate } from "../utils/formatDate";
 import { useToast } from "../hooks/useToast";
+import useAuth from "../hooks/useAuth";
+import { DEPARTMENTS } from "../constants/departments";
 
 const EMPTY_FORM = {
   title: "",
   category: "Technical",
+  department: "",
   description: "",
   venue: "",
   date: "",
@@ -26,6 +29,7 @@ const EMPTY_FORM = {
 };
 
 const TeacherDashboard = () => {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("events");
   const [loading, setLoading] = useState(true);
@@ -139,7 +143,10 @@ const TeacherDashboard = () => {
 
   const openCreateForm = () => {
     closeForm();
-    setFormData({ ...EMPTY_FORM });
+    setFormData({
+      ...EMPTY_FORM,
+      department: user?.department || "Computer Science",
+    });
     setShowForm(true);
   };
 
@@ -149,6 +156,7 @@ const TeacherDashboard = () => {
     setFormData({
       title: event.title,
       category: event.category,
+      department: event.department || event.createdBy?.department || user?.department || "Computer Science",
       description: event.description,
       venue: event.venue,
       date: event.date?.split("T")[0] || "",
@@ -189,6 +197,9 @@ const TeacherDashboard = () => {
     setSubmitting(true);
     try {
       const normalizedFormData = { ...formData };
+      if (!normalizedFormData.department) {
+        normalizedFormData.department = user?.department || "Computer Science";
+      }
       if (normalizedFormData.registrationType !== "team") {
         normalizedFormData.minTeamSize = "";
         normalizedFormData.maxTeamSize = "";
@@ -518,9 +529,12 @@ const TeacherDashboard = () => {
                     className="border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-sm transition bg-slate-50/50"
                   >
                     <div className="flex-grow">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-xs font-black bg-primary/10 text-primary px-2.5 py-1 rounded-full">
                           {event.category}
+                        </span>
+                        <span className="text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/60 px-2.5 py-1 rounded-full">
+                          🏢 {event.department || "Computer Science"}
                         </span>
                         <span
                           className={`text-xs font-extrabold px-2.5 py-1 rounded-full capitalize ${statusBadge(event.status)}`}
@@ -1134,6 +1148,25 @@ const TeacherDashboard = () => {
                 >
                   {["Technical", "Cultural", "Sports", "Workshop"].map((c) => (
                     <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Department
+                </label>
+                <select
+                  name="department"
+                  value={formData.department || user?.department || "Computer Science"}
+                  onChange={handleFormChange}
+                  required
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm bg-white"
+                >
+                  {DEPARTMENTS.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
                   ))}
                 </select>
               </div>

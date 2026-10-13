@@ -29,7 +29,7 @@ const registerUser = async (req, res) => {
     });
   }
 
-  if (!['student', 'teacher'].includes(role)) {
+  if (!['student', 'teacher', 'hod'].includes(role)) {
     return res.status(400).json({
       success: false,
       error: 'This role cannot be assigned through public registration',
