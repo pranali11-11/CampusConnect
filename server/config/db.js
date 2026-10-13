@@ -15,9 +15,9 @@ const connectDB = async () => {
       ...(useTLS && { tls: true, tlsAllowInvalidCertificates: false }),
       serverSelectionTimeoutMS: 15000,
     });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    console.log(`MongoDB Connected: ${conn.connection.host} (Database: ${conn.connection.name})`);
   } catch (error) {
-    console.error(`MongoDB connection failed (${error.name || 'Error'}). Check MONGO_URI and Atlas network access.`);
+    console.error(`MongoDB connection failed: ${error.message}`);
     process.exit(1);
   }
 };
