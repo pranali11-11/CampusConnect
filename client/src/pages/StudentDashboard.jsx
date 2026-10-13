@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/common/Sidebar';
 import Loader from '../components/common/Loader';
+import InteractiveProfile from '../components/profile/InteractiveProfile';
 import registrationService from '../services/registrationService';
 import eventService from '../services/eventService';
 import { formatDate } from '../utils/formatDate';
@@ -670,90 +671,18 @@ const StudentDashboard = () => {
             </div>
           )}
 
-          {/* ──────────────── TAB 4: MY PROFILE ──────────────── */}
+          {/* ──────────────── TAB 5: MY PROFILE ──────────────── */}
           {activeTab === 'profile' && (
-            <div className="space-y-6">
-              {/* Student Identity Card */}
-              <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-blue-500/20 relative overflow-hidden">
-                <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 text-white font-black text-2xl flex items-center justify-center shadow-lg">
-                      {user?.name
-                        ? user.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .slice(0, 2)
-                            .join('')
-                            .toUpperCase()
-                        : 'ST'}
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl sm:text-2xl font-black tracking-tight">{user.name}</h2>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                          ✓ Verified
-                        </span>
-                      </div>
-                      <p className="text-xs text-blue-100 font-medium mt-0.5">{user.email}</p>
-                      <p className="text-xs text-blue-200 font-semibold mt-1 uppercase tracking-wider">
-                        {user.department} Department
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/15 backdrop-blur-md border border-white/20 px-4 py-2.5 rounded-2xl text-right self-stretch sm:self-auto">
-                    <p className="text-[10px] uppercase tracking-wider font-extrabold text-blue-200">
-                      Roll Number
-                    </p>
-                    <p className="text-base font-black tracking-wider uppercase">
-                      {user.rollNumber || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile Details Grid */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-sm">
-                <h3 className="text-base font-black text-slate-900 border-b border-slate-100 pb-4 mb-6">
-                  📋 Academic & Contact Details
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Full Name</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{user.name}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Roll Number</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1 uppercase">{user.rollNumber || 'N/A'}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Email Address</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1 truncate">{user.email}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Mobile Number</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{user.mobile || 'Not Specified'}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Branch / Dept</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{user.department}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Account Role</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1 capitalize">{user.role}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <InteractiveProfile
+              role="student"
+              stats={[
+                { label: 'Registered Events', value: registrations.length, icon: '🎟️', tabId: 'registrations' },
+                { label: 'Attended Events', value: attendedCount, icon: '✅', tabId: 'registrations' },
+                { label: 'Earned Certificates', value: certificates.length, icon: '🎓', tabId: 'certificates' },
+                { label: 'Unread Alerts', value: unreadCount, icon: '🔔', tabId: 'notifications' },
+              ]}
+              onNavigateTab={(tabId) => setActiveTab(tabId)}
+            />
           )}
         </main>
       </div>

@@ -60,7 +60,9 @@ const getApprovedEvents = async (req, res) => {
     filter.department = req.query.department;
   }
 
-  const events = await Event.find(filter).populate('createdBy coordinatorId', 'name email mobile department');
+  const events = await Event.find(filter)
+    .sort({ date: 1, createdAt: -1 })
+    .populate('createdBy coordinatorId', 'name email mobile department');
 
   res.status(200).json({
     success: true,
@@ -74,7 +76,7 @@ const getApprovedEvents = async (req, res) => {
  * GET /api/events/upcoming
  */
 const getUpcomingEvents = async (req, res) => {
-  const limit = Math.max(1, parseInt(req.query.limit, 10) || 3);
+  const limit = req.query.limit ? Math.max(1, parseInt(req.query.limit, 10)) : null;
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
@@ -87,10 +89,15 @@ const getUpcomingEvents = async (req, res) => {
     filter.department = req.query.department;
   }
 
-  const events = await Event.find(filter)
+  let query = Event.find(filter)
     .sort({ date: 1 })
-    .limit(limit)
     .populate('createdBy coordinatorId', 'name email mobile department');
+
+  if (limit) {
+    query = query.limit(limit);
+  }
+
+  const events = await query;
 
   res.status(200).json({
     success: true,
