@@ -13,6 +13,7 @@ const HODDashboard = () => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("approvals");
   const [loading, setLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [pendingEvents, setPendingEvents] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -98,10 +99,45 @@ const HODDashboard = () => {
   if (loading) return <Loader />;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow flex flex-col md:flex-row gap-8">
-      <Sidebar tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div className="min-h-screen bg-slate-50/70 flex flex-col md:flex-row w-full font-sans antialiased text-slate-800">
+      <Sidebar
+        tabs={tabs}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
 
-      <main className="flex-grow bg-white border border-slate-100 rounded-2xl p-6 shadow-sm min-h-[500px]">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition shrink-0"
+              aria-label="Open sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                <span>CampusConnect</span>
+                <span>/</span>
+                <span className="text-primary capitalize">HOD Portal</span>
+                <span>/</span>
+                <span className="text-slate-600 truncate">{tabs.find((t) => t.id === activeTab)?.label}</span>
+              </div>
+              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight truncate">
+                {tabs.find((t) => t.id === activeTab)?.label}
+              </h1>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm min-h-[500px]">
         {/* Overview */}
         {activeTab === "overview" && (
           <div>
@@ -449,7 +485,9 @@ const HODDashboard = () => {
             </div>
           </div>
         )}
-      </main>
+          </div>
+        </main>
+      </div>
 
       {/* Reject Modal */}
       {rejectingEvent && (
