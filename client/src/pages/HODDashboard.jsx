@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Sidebar from "../components/common/Sidebar";
 import Loader from "../components/common/Loader";
+import InteractiveProfile from "../components/profile/InteractiveProfile";
 import eventService from "../services/eventService";
 import registrationService from "../services/registrationService";
 import { formatDate } from "../utils/formatDate";
@@ -1056,49 +1057,38 @@ const HODDashboard = () => {
                 TAB 5: PROFILE
                ══════════════════════════════════════════════════════════════ */}
             {activeTab === "profile" && (
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-4 mb-5">
-                  👤 HOD Profile & Jurisdiction
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Full Name
-                    </span>
-                    <span className="text-base font-bold text-slate-800">
-                      {user.name}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Email Address
-                    </span>
-                    <span className="text-base font-bold text-slate-800">
-                      {user.email}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Department Jurisdiction
-                    </span>
-                    <span className="text-base font-bold text-primary flex items-center gap-1.5">
-                      <span>🏢</span>
-                      <span>{user.department}</span>
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      You receive and approve events created for the {user.department} department.
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Role
-                    </span>
-                    <span className="text-base font-bold text-slate-800 capitalize">
-                      {user.role} (Head of Department)
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <InteractiveProfile
+                role="hod"
+                stats={[
+                  {
+                    label: "Dept Events",
+                    value: departmentEvents.length,
+                    icon: "📋",
+                    tabId: "overview",
+                  },
+                  {
+                    label: "Pending Approvals",
+                    value: pendingEvents.length,
+                    icon: "⏳",
+                    tabId: "approvals",
+                  },
+                  {
+                    label: "Approved in Dept",
+                    value: departmentEvents.filter(
+                      (e) => e.status === "approved" || e.status === "hod_approved"
+                    ).length,
+                    icon: "✅",
+                    tabId: "overview",
+                  },
+                  {
+                    label: "College Total",
+                    value: totalEventsAcrossAllDepts,
+                    icon: "🏛️",
+                    tabId: "departments",
+                  },
+                ]}
+                onNavigateTab={(tabId) => setActiveTab(tabId)}
+              />
             )}
 
           </div>

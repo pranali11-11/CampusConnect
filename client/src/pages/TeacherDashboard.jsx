@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Sidebar from "../components/common/Sidebar";
 import Loader from "../components/common/Loader";
+import InteractiveProfile from "../components/profile/InteractiveProfile";
 import eventService from "../services/eventService";
 import registrationService from "../services/registrationService";
 import { formatDate } from "../utils/formatDate";
@@ -457,6 +458,7 @@ const TeacherDashboard = () => {
     { id: "participants", label: "Participants", icon: "👥" },
     { id: "gallery", label: "Upload Gallery", icon: "🖼️" },
     { id: "notifications", label: "Notifications", icon: "🔔" },
+    { id: "profile", label: "My Profile", icon: "👤" },
   ];
 
   if (loading) return <Loader />;
@@ -1097,6 +1099,30 @@ const TeacherDashboard = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── MY PROFILE ── */}
+        {activeTab === "profile" && (
+          <InteractiveProfile
+            role="teacher"
+            stats={[
+              { label: "Created Events", value: myEvents.length, icon: "📋", tabId: "events" },
+              {
+                label: "Approved Events",
+                value: myEvents.filter((e) => e.status === "approved" || e.status === "hod_approved").length,
+                icon: "✅",
+                tabId: "events",
+              },
+              {
+                label: "Pending Approvals",
+                value: myEvents.filter((e) => e.status === "pending").length,
+                icon: "⏳",
+                tabId: "events",
+              },
+              { label: "Gallery Photos", value: myGallery.length, icon: "🖼️", tabId: "gallery" },
+            ]}
+            onNavigateTab={(tabId) => setActiveTab(tabId)}
+          />
         )}
           </div>
         </main>
