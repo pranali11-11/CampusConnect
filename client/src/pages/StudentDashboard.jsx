@@ -32,6 +32,8 @@ const StudentDashboard = () => {
   const [selectedQR, setSelectedQR] = useState(null);
   const [selectedCert, setSelectedCert] = useState(null);
   const [viewingEvent, setViewingEvent] = useState(null);
+  const [generatingCertId, setGeneratingCertId] = useState(null);
+  const [downloadingCertId, setDownloadingCertId] = useState(null);
 
   // Fetch all student dashboard datasets
   useEffect(() => {
@@ -74,31 +76,77 @@ const StudentDashboard = () => {
     }
   };
 
-  // Generate certificate for a registration
+  // Check if teacher uploaded a certificate template for this event
+  const hasCertificateTemplate = (registration) => {
+    return Boolean(registration.eventId?.certificateTemplate?.trim());
+  };
+
+  // Check if student is eligible for certificate:
+  // MUST be marked attended, event MUST have ended, and teacher MUST have uploaded a certificate template
+  const isCertificateEligible = (registration) => {
+    if (registration.status !== 'attended') return false;
+    const eventDate = new Date(registration.eventId?.date);
+    const now = new Date();
+    if (eventDate > now) return false;
+    return hasCertificateTemplate(registration);
+  };
+
+  // Find existing certificate for a registration if already generated
+  const getExistingCertificate = (registrationId) => {
+    return certificates.find((c) => {
+      const regId = typeof c.registrationId === 'object' ? c.registrationId?._id : c.registrationId;
+      return regId === registrationId;
+    });
+  };
+
+  // Generate certificate for a registration using teacher's template
   const handleGenerateCertificate = async (registrationId) => {
     try {
+      setGeneratingCertId(registrationId);
       const response = await registrationService.generateCertificate(registrationId);
       if (response.success) {
-        showToast('Certificate generated successfully!', 'success');
+        showToast('Certificate generated successfully using the uploaded template!', 'success');
         // Refresh certificates list
         const certRes = await registrationService.getMyCertificates();
-        if (certRes.success) setCertificates(certRes.data);
+        if (certRes.success) {
+          setCertificates(certRes.data);
+          const found = certRes.data.find((c) => {
+            const regId = typeof c.registrationId === 'object' ? c.registrationId?._id : c.registrationId;
+            return regId === registrationId;
+          });
+          if (found) setSelectedCert(found);
+        }
       }
     } catch (error) {
       console.error('Certificate generation error:', error);
       const errorMsg =
         error.response?.data?.error || error.message || 'Failed to generate certificate';
       showToast(errorMsg, 'error');
+    } finally {
+      setGeneratingCertId(null);
     }
   };
 
-  // Check if student is eligible for certificate
-  const isCertificateEligible = (registration) => {
-    if (registration.status !== 'attended') return false;
-    const eventDate = new Date(registration.eventId?.date);
-    const now = new Date();
-    if (eventDate > now) return false;
-    return true;
+  // Download official certificate PDF generated with teacher's template
+  const handleDownloadCertificate = async (certId, studentName = 'Student') => {
+    try {
+      setDownloadingCertId(certId);
+      const blob = await registrationService.downloadCertificatePdf(certId);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Certificate_${(studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_')}_${certId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Certificate PDF downloaded successfully!', 'success');
+    } catch (err) {
+      console.error('Download certificate error:', err);
+      showToast(err.response?.data?.error || 'Failed to download certificate PDF', 'error');
+    } finally {
+      setDownloadingCertId(null);
+    }
   };
 
   const tabs = [
@@ -326,16 +374,35 @@ const StudentDashboard = () => {
                           </div>
                         ) : null}
 
-                        {isCertificateEligible(reg) && (
+                        {/* Certificate generation / view actions */}
+                        {getExistingCertificate(reg._id) ? (
+                          <button
+                            onClick={() => setSelectedCert(getExistingCertificate(reg._id))}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/20"
+                            title="View Official Certificate"
+                          >
+                            <span>📜</span>
+                            <span>View Certificate</span>
+                          </button>
+                        ) : isCertificateEligible(reg) ? (
                           <button
                             onClick={() => handleGenerateCertificate(reg._id)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/20"
-                            title="Generate Official Certificate"
+                            disabled={generatingCertId === reg._id}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/20 disabled:opacity-50"
+                            title="Generate Official Certificate using Faculty Template"
                           >
-                            <span>🎓</span>
-                            <span>Certificate</span>
+                            <span>{generatingCertId === reg._id ? '⏳' : '🎓'}</span>
+                            <span>{generatingCertId === reg._id ? 'Generating...' : 'Generate Certificate'}</span>
                           </button>
-                        )}
+                        ) : reg.status === 'attended' && !hasCertificateTemplate(reg) ? (
+                          <div
+                            className="text-xs text-amber-800 bg-amber-50 font-bold py-2 px-3 rounded-xl border border-amber-200 flex items-center gap-1.5"
+                            title="Faculty coordinator has not uploaded a certificate template for this event. Certificate generation is disabled."
+                          >
+                            <span>⚠️</span>
+                            <span>No Template Uploaded</span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -568,26 +635,51 @@ const StudentDashboard = () => {
                   {certificates.map((cert) => (
                     <div
                       key={cert._id}
-                      className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-amber-300 transition-all flex items-center justify-between gap-4"
+                      className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-md hover:border-amber-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                     >
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                          ISSUED {formatDate(cert.generatedAt)}
-                        </span>
-                        <h3 className="font-black text-slate-900 mt-1 text-base leading-snug truncate">
-                          {cert.eventId?.title}
-                        </h3>
-                        <p className="text-xs text-primary font-bold mt-1 uppercase tracking-wider">
-                          {cert.eventId?.category || 'CAMPUS EVENT'}
-                        </p>
+                      <div className="flex items-center gap-4 min-w-0">
+                        {resolveImageUrl(cert.eventId?.certificateTemplate) ? (
+                          <div className="w-16 h-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-inner">
+                            <img
+                              src={resolveImageUrl(cert.eventId?.certificateTemplate)}
+                              alt="Template Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-16 h-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0 border border-amber-100">
+                            📜
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                            ISSUED {formatDate(cert.generatedAt)}
+                          </span>
+                          <h3 className="font-black text-slate-900 mt-0.5 text-base leading-snug truncate">
+                            {cert.eventId?.title}
+                          </h3>
+                          <p className="text-xs text-primary font-bold mt-0.5 uppercase tracking-wider">
+                            {cert.eventId?.category || 'CAMPUS EVENT'} {cert.eventId?.department ? `• ${cert.eventId.department}` : ''}
+                          </p>
+                        </div>
                       </div>
 
-                      <button
-                        onClick={() => setSelectedCert(cert)}
-                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm shrink-0"
-                      >
-                        View & Print
-                      </button>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button
+                          onClick={() => setSelectedCert(cert)}
+                          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm"
+                        >
+                          View Certificate
+                        </button>
+                        <button
+                          onClick={() => handleDownloadCertificate(cert._id, user?.name)}
+                          disabled={downloadingCertId === cert._id}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2.5 rounded-xl transition border border-slate-200"
+                          title="Download PDF"
+                        >
+                          {downloadingCertId === cert._id ? '⏳' : '📥'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -751,52 +843,101 @@ const StudentDashboard = () => {
 
       {/* ──────────────── MODAL: CERTIFICATE VIEWER ──────────────── */}
       {selectedCert && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-100 shadow-2xl relative animate-scale-in">
-            <button
-              onClick={() => setSelectedCert(null)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-lg font-bold transition"
-            >
-              &times;
-            </button>
-
-            {/* Formal Certificate Layout */}
-            <div className="border-8 border-double border-amber-600/80 p-6 sm:p-8 text-center bg-amber-50/20 rounded-2xl flex flex-col items-center gap-5 shadow-inner">
-              <span className="text-4xl">📜</span>
-              <h2 className="text-xs font-extrabold uppercase tracking-widest text-amber-800">
-                Certificate of Attendance & Completion
-              </h2>
-              <p className="text-slate-500 italic text-xs sm:text-sm">This certificate is proudly awarded to</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 underline decoration-amber-600 decoration-wavy py-1">
-                {user.name}
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 max-w-md leading-relaxed">
-                for active participation and completion of the university event{' '}
-                <span className="font-extrabold text-slate-900">"{selectedCert.eventId?.title}"</span>{' '}
-                conducted by the department of{' '}
-                <span className="font-semibold text-slate-900">
-                  {selectedCert.eventId?.coordinatorId?.department || user.department}
-                </span>.
-              </p>
-
-              <div className="w-full flex justify-between items-end border-t border-slate-200 pt-5 mt-2">
-                <div className="text-left">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verification ID</p>
-                  <code className="text-[11px] font-semibold text-slate-700">{selectedCert._id}</code>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</p>
-                  <p className="text-xs font-semibold text-slate-700">{formatDate(selectedCert.generatedAt)}</p>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-3xl w-full border border-slate-100 shadow-2xl relative animate-scale-in my-auto max-h-[95vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎓</span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    Official Certificate
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Generated using official faculty-uploaded template
+                  </p>
                 </div>
               </div>
+              <button
+                onClick={() => setSelectedCert(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-lg font-bold transition"
+              >
+                &times;
+              </button>
             </div>
 
-            <div className="mt-5 flex gap-3 justify-end">
+            {/* Template-Based Certificate Canvas */}
+            <div className="my-4 overflow-hidden rounded-2xl border border-slate-200 shadow-md relative bg-slate-900 flex items-center justify-center">
+              {resolveImageUrl(selectedCert.eventId?.certificateTemplate) ? (
+                <div className="relative w-full">
+                  {/* Teacher's Uploaded Background Template */}
+                  <img
+                    src={resolveImageUrl(selectedCert.eventId?.certificateTemplate)}
+                    alt="Certificate Template"
+                    className="w-full h-auto block select-none"
+                  />
+
+                  {/* Overlaid Student & Event Details on top of template */}
+                  <div className="absolute inset-0 flex flex-col justify-between p-4 sm:p-8 md:p-10 pointer-events-none text-center">
+                    {/* Top breathing room */}
+                    <div className="h-1/4"></div>
+
+                    {/* Middle: Recipient Information */}
+                    <div className="space-y-1 sm:space-y-2">
+                      <p className="text-[9px] sm:text-xs uppercase tracking-widest font-extrabold text-slate-700 drop-shadow-sm">
+                        This Certificate is Proudly Awarded to
+                      </p>
+                      <h4 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight drop-shadow-sm">
+                        {user?.name || selectedCert.studentId?.name}
+                      </h4>
+                      <div className="w-24 sm:w-36 h-0.5 bg-amber-500 mx-auto rounded-full"></div>
+                      <p className="text-[11px] sm:text-sm font-bold text-slate-800 max-w-md mx-auto leading-snug drop-shadow-sm">
+                        for active participation and completion of{' '}
+                        <span className="text-primary font-black">"{selectedCert.eventId?.title}"</span>
+                      </p>
+                      <p className="text-[9px] sm:text-xs font-semibold text-slate-600 drop-shadow-sm">
+                        Department of {selectedCert.eventId?.department || selectedCert.eventId?.coordinatorId?.department || user?.department}
+                      </p>
+                    </div>
+
+                    {/* Bottom: Verification Bar */}
+                    <div className="flex justify-between items-end text-[8px] sm:text-[10px] font-bold text-slate-700 pt-2 border-t border-slate-400/30">
+                      <div className="text-left bg-white/85 backdrop-blur-sm px-2 py-1 rounded shadow-sm">
+                        <span>Verification ID: </span>
+                        <code className="text-slate-900 font-mono">{selectedCert._id}</code>
+                      </div>
+                      <div className="text-right bg-white/85 backdrop-blur-sm px-2 py-1 rounded shadow-sm">
+                        <span>Issued: </span>
+                        <span className="text-slate-900">{formatDate(selectedCert.generatedAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-10 text-center text-slate-400">
+                  <p className="text-3xl mb-2">⚠️</p>
+                  <p className="text-sm font-semibold text-slate-200">
+                    No certificate template was uploaded for this event.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-wrap gap-2.5 justify-end pt-2 border-t border-slate-100">
+              <button
+                onClick={() => handleDownloadCertificate(selectedCert._id, user?.name)}
+                disabled={downloadingCertId === selectedCert._id}
+                className="bg-primary hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span>{downloadingCertId === selectedCert._id ? '⏳' : '📥'}</span>
+                <span>{downloadingCertId === selectedCert._id ? 'Downloading PDF...' : 'Download Official PDF'}</span>
+              </button>
               <button
                 onClick={() => window.print()}
-                className="bg-primary hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-sm"
+                className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-1.5"
               >
-                🖨️ Print Certificate
+                <span>🖨️</span>
+                <span>Print</span>
               </button>
               <button
                 onClick={() => setSelectedCert(null)}

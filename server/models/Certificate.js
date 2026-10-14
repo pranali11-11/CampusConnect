@@ -16,6 +16,10 @@ const certificateSchema = new mongoose.Schema({
     ref: 'Event',
     required: true,
   },
+  certificateUrl: {
+    type: String,
+    default: '',
+  },
   generatedAt: {
     type: Date,
     default: Date.now,

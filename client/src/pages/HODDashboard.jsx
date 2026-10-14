@@ -527,6 +527,15 @@ const HODDashboard = () => {
                               <span className="text-xs font-extrabold bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-1 rounded-full animate-pulse">
                                 Pending HOD Review
                               </span>
+                              {event.certificateTemplate ? (
+                                <span className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                  📜 Template Ready
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                  ⚠️ No Template
+                                </span>
+                              )}
                             </div>
 
                             <button
@@ -1286,6 +1295,50 @@ const HODDashboard = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Certificate Template Preview & Status for HOD */}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                  Certificate Template Status
+                </h4>
+                {viewingEvent.certificateTemplate ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4">
+                    <img
+                      src={resolveImageUrl(viewingEvent.certificateTemplate)}
+                      alt="Certificate Template"
+                      className="w-48 h-28 object-contain bg-slate-900/5 rounded-lg border border-emerald-300 shadow-sm flex-shrink-0"
+                    />
+                    <div className="flex-1 text-xs">
+                      <div className="inline-flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full mb-1">
+                        <span>📜</span> Template Uploaded & Configured
+                      </div>
+                      <p className="text-slate-600 mt-1">
+                        The faculty has uploaded a custom certificate template. Eligible attending students will be able to generate and download their customized certificate upon event completion.
+                      </p>
+                      <a
+                        href={resolveImageUrl(viewingEvent.certificateTemplate)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block mt-2 font-bold text-primary hover:underline text-[11px]"
+                      >
+                        Open Full Template Image ↗
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs flex items-start gap-3">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <span className="font-bold text-amber-900 block">
+                        No Certificate Template Uploaded
+                      </span>
+                      <p className="text-amber-800/90 mt-0.5">
+                        The faculty has not attached a certificate template to this event. Student certificate generation will remain disabled unless a template is uploaded.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Rejection Reason if rejected */}

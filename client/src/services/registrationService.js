@@ -185,6 +185,18 @@ const getCertificateById = async (id) => {
 };
 
 /**
+ * Download certificate PDF generated using teacher's template.
+ * @param {string} id - Certificate ID.
+ * @returns {Promise<Blob>} Binary blob of the PDF.
+ */
+const downloadCertificatePdf = async (id) => {
+  const response = await api.get(`/certificates/${id}/download`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+/**
  * Approve a registration request.
  * @param {string} registrationId - Registration ID.
  * @returns {Promise<object>} Updated registration.
@@ -221,10 +233,10 @@ const registrationService = {
   getMyCertificates,
   generateCertificate,
   getCertificateById,
+  downloadCertificatePdf,
   approveRegistration,
   rejectRegistration,
   markAttendanceBulk,
-
 };
 
 export default registrationService;

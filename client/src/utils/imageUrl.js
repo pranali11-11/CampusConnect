@@ -15,10 +15,23 @@ export const resolveImageUrl = (url) => {
     return url;
   }
 
-  if (url.startsWith("/uploads/") || url.startsWith("uploads/")) {
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-    const backendBase = apiUrl.replace(/\/api\/?$/, "");
-    return `${backendBase}${url.startsWith("/") ? url : `/${url}`}`;
+  // Normalize Windows backslashes
+  const normalized = url.replace(/\\/g, "/");
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  const backendBase = apiUrl.replace(/\/api\/?$/, "");
+
+  const uploadsIndex = normalized.toLowerCase().lastIndexOf("/uploads/");
+  if (uploadsIndex !== -1) {
+    const relativePath = normalized.substring(uploadsIndex); // e.g. /uploads/filename.png
+    return `${backendBase}${relativePath}`;
+  }
+
+  if (normalized.startsWith("uploads/")) {
+    return `${backendBase}/${normalized}`;
+  }
+
+  if (normalized.startsWith("/uploads/")) {
+    return `${backendBase}${normalized}`;
   }
 
   return url;

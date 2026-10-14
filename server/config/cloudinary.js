@@ -91,10 +91,19 @@ const uploadBanner = multer({
   },
 });
 
-// Middleware to normalize req.file.path for local uploads
+// Middleware to normalize req.file.path and req.files paths for local uploads
 const normalizeFilePath = (req, res, next) => {
   if (req.file && !isCloudinaryConfigured()) {
     req.file.path = `/uploads/${req.file.filename}`;
+  }
+  if (req.files && !isCloudinaryConfigured()) {
+    Object.keys(req.files).forEach((key) => {
+      if (Array.isArray(req.files[key])) {
+        req.files[key].forEach((file) => {
+          file.path = `/uploads/${file.filename}`;
+        });
+      }
+    });
   }
   next();
 };

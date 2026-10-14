@@ -5,6 +5,7 @@ import InteractiveProfile from "../components/profile/InteractiveProfile";
 import eventService from "../services/eventService";
 import registrationService from "../services/registrationService";
 import { formatDate } from "../utils/formatDate";
+import { resolveImageUrl } from "../utils/imageUrl";
 import { useToast } from "../hooks/useToast";
 import useAuth from "../hooks/useAuth";
 import { DEPARTMENTS } from "../constants/departments";
@@ -174,6 +175,16 @@ const TeacherDashboard = () => {
       minTeamSize: event.minTeamSize || "2",
       maxTeamSize: event.maxTeamSize || "4",
     });
+    if (event.registrationBannerUrl || event.bannerUrl) {
+      setRegistrationBannerPreview(
+        resolveImageUrl(event.registrationBannerUrl || event.bannerUrl)
+      );
+    }
+    if (event.certificateTemplate) {
+      setCertificateTemplatePreview(
+        resolveImageUrl(event.certificateTemplate)
+      );
+    }
     setShowForm(true);
   };
 
@@ -557,6 +568,22 @@ const TeacherDashboard = () => {
                           ❌ Rejection reason: {event.rejectionReason}
                         </p>
                       )}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {event.certificateTemplate ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                            <span>📜</span>
+                            <span>Certificate Template Uploaded</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200"
+                            title="Students cannot generate certificates for this event until a template is uploaded."
+                          >
+                            <span>⚠️</span>
+                            <span>No Certificate Template (Certificates Disabled)</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <button
@@ -1403,23 +1430,86 @@ const TeacherDashboard = () => {
                 </div>
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Certificate Template (optional)
-                </label>
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-3">
+              <div className="md:col-span-2 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📜</span> Certificate Template
+                    <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      Required for Certificate Generation
+                    </span>
+                  </label>
+                </div>
+
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5">
+                  <span className="text-base flex-shrink-0">💡</span>
+                  <div className="leading-relaxed">
+                    <span className="font-bold">Important Notice:</span> Certificates for this event are strictly rendered using your custom uploaded template image. Default templates are not used. If no template is uploaded, certificate generation will remain disabled for attendees.
+                  </div>
+                </div>
+
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-5 flex flex-col items-center gap-4 bg-slate-50/50">
                   {certificateTemplatePreview ? (
-                    <img
-                      src={certificateTemplatePreview}
-                      alt="Certificate template preview"
-                      className="w-48 h-32 object-cover rounded-md"
-                    />
+                    <div className="w-full flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="relative group rounded-lg overflow-hidden border border-slate-200 shadow-inner flex-shrink-0">
+                        <img
+                          src={certificateTemplatePreview}
+                          alt="Certificate template preview"
+                          className="w-56 h-36 object-contain bg-slate-900/5 rounded-md"
+                        />
+                        <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                          Uploaded Template
+                        </span>
+                      </div>
+                      <div className="flex-1 flex flex-col gap-2 text-center sm:text-left">
+                        <div className="flex items-center gap-2 justify-center sm:justify-start">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                            ✓ Ready for Overlay
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Student Name, Event Title, Department, Date, and Verification ID will be printed on this template when eligible students generate their certificate.
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 justify-center sm:justify-start">
+                          <label
+                            htmlFor="certificate-template-file"
+                            className="cursor-pointer text-xs font-bold px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-blue-600 transition shadow-sm"
+                          >
+                            Replace Image
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCertificateTemplateFile(null);
+                              setCertificateTemplatePreview("");
+                              setFormData((prev) => ({ ...prev, certificateTemplate: "" }));
+                            }}
+                            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="text-sm text-slate-500">
-                      Upload a certificate background template (JPG/PNG) with
-                      space for student name
+                    <div className="text-center py-4 flex flex-col items-center gap-2">
+                      <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-2xl shadow-inner">
+                        📜
+                      </div>
+                      <div className="text-sm font-bold text-slate-800">
+                        Upload Certificate Background Template
+                      </div>
+                      <p className="text-xs text-slate-500 max-w-md">
+                        Supported formats: PNG, JPG, JPEG (Landscape A4 or 1920x1080 recommended). Dynamic recipient details will be overlaid automatically.
+                      </p>
+                      <label
+                        htmlFor="certificate-template-file"
+                        className="mt-2 cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-blue-600 text-white text-xs font-bold shadow-md transition"
+                      >
+                        <span>📁</span> Choose Template File
+                      </label>
                     </div>
                   )}
+
                   <input
                     type="file"
                     name="certificateTemplate"
@@ -1428,18 +1518,24 @@ const TeacherDashboard = () => {
                     className="hidden"
                     id="certificate-template-file"
                   />
-                  <label
-                    htmlFor="certificate-template-file"
-                    className="cursor-pointer text-xs font-semibold text-primary"
-                  >
-                    Choose certificate template
-                  </label>
+
+                  <div className="w-full flex items-center gap-2 text-xs text-slate-400">
+                    <div className="h-[1px] bg-slate-200 flex-1" />
+                    <span>OR PROVIDE IMAGE URL</span>
+                    <div className="h-[1px] bg-slate-200 flex-1" />
+                  </div>
+
                   <input
                     name="certificateTemplate"
                     value={formData.certificateTemplate}
-                    onChange={handleFormChange}
-                    placeholder="Or paste certificate template URL (optional)"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                    onChange={(e) => {
+                      handleFormChange(e);
+                      if (e.target.value.trim() && !certificateTemplateFile) {
+                        setCertificateTemplatePreview(e.target.value.trim());
+                      }
+                    }}
+                    placeholder="https://example.com/certificate-template.png (or /uploads/...)"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs"
                   />
                 </div>
               </div>
