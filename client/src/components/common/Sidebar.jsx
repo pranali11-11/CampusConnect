@@ -141,8 +141,8 @@ const Sidebar = ({
                         <span className="truncate">{tab.label}</span>
                       </div>
 
-                      {/* Notification Count Badge */}
-                      {isNotifTab && unreadCount > 0 && (
+                      {/* Notification Count Badge or Tab Badge */}
+                      {isNotifTab && unreadCount > 0 ? (
                         <span
                           className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
                             isActive
@@ -152,7 +152,17 @@ const Sidebar = ({
                         >
                           {unreadCount}
                         </span>
-                      )}
+                      ) : tab.badge !== undefined && tab.badge !== null ? (
+                        <span
+                          className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                            isActive
+                              ? 'bg-white text-primary'
+                              : 'bg-amber-500 text-white'
+                          }`}
+                        >
+                          {tab.badge}
+                        </span>
+                      ) : null}
                     </button>
                   </li>
                 );

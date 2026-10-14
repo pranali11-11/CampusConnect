@@ -114,6 +114,16 @@ const getHODDashboardStats = async () => {
   return response.data;
 };
 
+/**
+ * Fetch events grouped by department.
+ * @param {object} params - Optional query params (status, department).
+ * @returns {Promise<object>} Department-wise events.
+ */
+const getDepartmentWiseEvents = async (params = {}) => {
+  const response = await api.get('/events/department-wise', { params });
+  return response.data;
+};
+
 const getEventRegistrations = async (eventId) => {
   const response = await api.get(`/events/${eventId}/registrations`);
   return response.data;
@@ -152,6 +162,7 @@ const eventService = {
   rejectEvent,
   getTeacherEvents,
   getPendingEvents,
+  getDepartmentWiseEvents,
   getHODDashboardStats,
 };
 

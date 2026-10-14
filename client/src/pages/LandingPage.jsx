@@ -119,7 +119,7 @@ const LandingPage = () => {
       try {
         setLoading(true);
         setError("");
-        const response = await eventService.getUpcomingEvents(3);
+        const response = await eventService.getApprovedEvents();
         if (response.success) {
           setEvents(response.data);
         }
@@ -366,6 +366,12 @@ const LandingPage = () => {
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm sm:text-base">
             Don&apos;t miss out on the latest happenings around campus
           </p>
+          {events.length > 0 && (
+            <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 bg-primary/10 dark:bg-primary/20 text-primary dark:text-blue-400 text-xs font-semibold rounded-full border border-primary/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Showing all {events.length} campus event{events.length > 1 ? "s" : ""}</span>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -441,6 +447,11 @@ const LandingPage = () => {
                       <span className="bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm backdrop-blur-md">
                         {event.category}
                       </span>
+                      {event.department && (
+                        <span className="bg-white/95 dark:bg-slate-900/90 text-primary dark:text-blue-400 text-xs font-bold px-3 py-1 rounded-full shadow-sm backdrop-blur-md">
+                          🏢 {event.department}
+                        </span>
+                      )}
                     </div>
                     <span
                       className={`absolute top-3 right-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-md ${statusClass}`}

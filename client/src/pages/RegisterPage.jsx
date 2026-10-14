@@ -3,22 +3,12 @@ import { useNavigate, Link } from "react-router-dom";
 import authService from "../services/authService";
 import { useToast } from "../hooks/useToast";
 
-const DEPARTMENTS = [
-  "Computer Science",
-  "Information Technology",
-  "Electronics & Communication",
-  "Mechanical Engineering",
-  "Civil Engineering",
-  "Electrical Engineering",
-  "Biotechnology",
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-];
+import { DEPARTMENTS } from "../constants/departments";
 
 const ROLES = [
   { value: "student", label: "Student", icon: "🎓" },
   { value: "teacher", label: "Teacher", icon: "👨‍🏫" },
+  { value: "hod", label: "HOD (Head of Department)", icon: "👔" },
 ];
 
 const VALIDATORS = {

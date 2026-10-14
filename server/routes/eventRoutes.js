@@ -11,6 +11,7 @@ const {
   rejectEventByHOD,
   getTeacherEvents,
   getPendingEvents,
+  getDepartmentWiseEvents,
   getHODDashboardStats,
 } = require('../controllers/eventController');
 const { uploadBanner, normalizeFilePath } = require('../config/cloudinary');
@@ -34,6 +35,9 @@ router.get('/pending', protect, roleMiddleware('hod'), getPendingEvents);
 
 // HOD dashboard analytics
 router.get('/dashboard', protect, roleMiddleware('hod'), getHODDashboardStats);
+
+// Department-wise events breakdown (must be defined BEFORE /:id)
+router.get('/department-wise', getDepartmentWiseEvents);
 
 // Upcoming events route (public)
 router.get('/upcoming', getUpcomingEvents);

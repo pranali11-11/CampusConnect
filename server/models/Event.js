@@ -12,6 +12,11 @@ const eventSchema = new mongoose.Schema(
       enum: ['Technical', 'Cultural', 'Sports', 'Workshop'],
       required: [true, 'Please specify an event category'],
     },
+    department: {
+      type: String,
+      required: [true, 'Please specify an event department'],
+      trim: true,
+    },
     description: {
       type: String,
       required: [true, 'Please provide an event description'],

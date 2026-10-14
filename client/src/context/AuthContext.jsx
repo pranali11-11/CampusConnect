@@ -79,6 +79,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
+   * Updates user details in context and persists optional new token.
+   * @param {object} userData - New user object.
+   * @param {string} [newToken] - Refreshed JWT token if provided.
+   */
+  const updateUser = (userData, newToken) => {
+    if (newToken) {
+      localStorage.setItem('token', newToken);
+      setToken(newToken);
+    }
+    if (userData) {
+      setUser(normalizeUser(userData));
+    }
+  };
+
+  /**
    * Logs out the user by clearing localStorage tokens and context state.
    */
   const logout = () => {
@@ -93,6 +108,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
+    updateUser,
     isAuthenticated: !!user,
   };
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, getMe } = require('../controllers/authController');
+const { registerUser, loginUser, getMe, updateProfile, changePassword } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { rateLimit } = require('express-rate-limit');
 
@@ -30,7 +30,9 @@ router.post('/forgot-password', loginLimiter, (req, res) => {
   });
 });
 
-// Protected user profile route
+// Protected user profile routes
 router.get('/me', protect, getMe);
+router.put('/profile', protect, updateProfile);
+router.put('/change-password', protect, changePassword);
 
 module.exports = router;

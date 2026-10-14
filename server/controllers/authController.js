@@ -29,7 +29,7 @@ const registerUser = async (req, res) => {
     });
   }
 
-  if (!['student', 'teacher'].includes(role)) {
+  if (!['student', 'teacher', 'hod'].includes(role)) {
     return res.status(400).json({
       success: false,
       error: 'This role cannot be assigned through public registration',
@@ -155,9 +155,134 @@ const getMe = async (req, res) => {
   });
 };
 
+/**
+ * Update user profile details
+ * PUT /api/auth/profile
+ * Access: Private
+ */
+const updateProfile = async (req, res) => {
+  const { name, mobile, department, rollNumber } = req.body || {};
+
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      error: 'User not found',
+    });
+  }
+
+  if (name !== undefined) {
+    if (typeof name !== 'string' || name.trim().length < 3 || name.trim().length > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name must be between 3 and 100 characters',
+      });
+    }
+    user.name = name.trim();
+  }
+
+  if (mobile !== undefined) {
+    if (typeof mobile !== 'string' || !/^\d{10}$/.test(mobile.trim())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Mobile number must be exactly 10 digits',
+      });
+    }
+    user.mobile = mobile.trim();
+  }
+
+  if (department !== undefined) {
+    if (typeof department !== 'string' || !department.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Department cannot be empty',
+      });
+    }
+    user.department = department.trim();
+  }
+
+  if (user.role === 'student' && rollNumber !== undefined) {
+    if (typeof rollNumber !== 'string' || !rollNumber.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Roll number is required for students',
+      });
+    }
+    user.rollNumber = rollNumber.trim();
+  }
+
+  await user.save();
+
+  const token = generateToken(user);
+
+  return res.status(200).json({
+    success: true,
+    message: 'Profile updated successfully',
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      rollNumber: user.rollNumber,
+      mobile: user.mobile,
+    },
+  });
+};
+
+/**
+ * Change user password
+ * PUT /api/auth/change-password
+ * Access: Private
+ */
+const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide both current and new password',
+    });
+  }
+
+  if (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 128) {
+    return res.status(400).json({
+      success: false,
+      error: 'New password must be at least 6 characters',
+    });
+  }
+
+  const user = await User.findById(req.user.id).select('+password');
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      error: 'User not found',
+    });
+  }
+
+  const isMatch = await bcrypt.compare(currentPassword, user.password);
+  if (!isMatch) {
+    return res.status(400).json({
+      success: false,
+      error: 'Incorrect current password',
+    });
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return res.status(200).json({
+    success: true,
+    message: 'Password changed successfully',
+  });
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getMe,
+  updateProfile,
+  changePassword,
   generateToken,
 };

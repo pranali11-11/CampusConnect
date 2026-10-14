@@ -40,11 +40,33 @@ const getMe = async () => {
   return response.data;
 };
 
+/**
+ * Update user profile details.
+ * @param {object} profileData - { name, mobile, department, rollNumber }
+ * @returns {Promise<object>} Response containing message, token, and updated user.
+ */
+const updateProfile = async (profileData) => {
+  const response = await api.put('/auth/profile', profileData);
+  return response.data;
+};
+
+/**
+ * Change user password.
+ * @param {object} passwordData - { currentPassword, newPassword }
+ * @returns {Promise<object>} Response from server.
+ */
+const changePassword = async (passwordData) => {
+  const response = await api.put('/auth/change-password', passwordData);
+  return response.data;
+};
+
 const authService = {
   login,
   register,
   forgotPassword,
   getMe,
+  updateProfile,
+  changePassword,
 };
 
 export default authService;
